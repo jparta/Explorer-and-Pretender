@@ -21,8 +21,8 @@
 - [ ] Self-managed k3s on a cloud VM
 - [ ] Public website with a domain and TLS
 - [ ] Rebuildable from scratch with documented commands
+- [ ] More kinds of Pretender alongside the terminal, each quite different from the others: one is an open world (a single one), others still to be found. Each Session gets a kind at random, independently per slot, so all three slots may show the same kind
 
 ## Ideas, not promises
 
 - New spectators see each Session from its start, replayed quickly and easing into live speed. This would make the experience slightly more interactive, which would detract from the mood of the exhibition.
-- The Pretender simulates something other than a terminal, such as an open world
