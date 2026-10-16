@@ -3,7 +3,7 @@
 ## Phase 1 — Runs on local Kubernetes
 
 - [ ] Explorer and Pretender hold a Session; it ends when the Explorer sounds out the Secret, or at a turn limit
-- [ ] N Sessions run at once; a new one starts when one ends
+- [ ] 3 slots in a looping horizontal carousel; a Session starts when someone watches its slot
 - [ ] Sessions are viewable live in the browser
 - [ ] Runner, web and Redis run as separate Deployments on a local cluster
 - [ ] `tilt up` builds and starts everything, with live updates while developing
@@ -13,6 +13,7 @@
 - [ ] Each Session runs as a Kubernetes Job
 - [ ] A session controller creates the Jobs, with least-privilege RBAC
 - [ ] Traffic enters through the Gateway API
+- [ ] A scripted stand-in model runs the exhibition without an API key
 
 ## Phase 3 — Public, in the cloud
 
