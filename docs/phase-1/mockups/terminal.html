@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mockup: terminal Pretender (Negative print)</title>
+<!--
+  Static mockup of the viewing page, drawn at 1440x900.
+  The tokens in :root are the style; the rules below them are the shared layout.
+  The open-world mockup uses the same layout with its own tokens.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Page (neutral, shared by every kind) */
+  --page-mat: #F3F1EC;
+  --page-bg: #FCFBF9;
+  --page-frame: #D2CFC7;
+
+  /* This kind's style */
+  --font: 'DM Mono', monospace;
+  --ink: #12355B;
+  --card-bg: #E9EEF4;
+  --card-border: #C9D3DE;
+  --explorer-bg: #DCE4F2;
+  --pretender-bg: #D7E7EB;
+  --box-border: 1.5px solid #12355B;
+  --box-radius: 12px;
+  --card-padding: 52px 120px;
+  --explorer-size: 15px;
+  --explorer-leading: 1.5;
+  --pretender-size: 14px;
+  --pretender-leading: 1.55;
+
+  /* Neighbouring slots: their colour hints at their kind */
+  --left-sliver-bg: #E6E0D2;
+  --left-sliver-border: #D0C7B4;
+  --right-sliver-bg: #E9EEF4;
+  --right-sliver-border: #C9D3DE;
+
+  /* The Secret (identical in every style) */
+  --secret-ink: #7A5208;
+  --secret-sheen: rgba(255, 206, 92, 0.8);
+}
+
+body { margin: 0; }
+.screen { width: 1440px; height: 900px; position: relative; overflow: hidden; background: var(--page-mat); font-family: var(--font); color: var(--ink); }
+.frame { position: absolute; inset: 24px; overflow: hidden; background: var(--page-bg); border: 1px solid var(--page-frame); }
+.card, .sliver { position: absolute; top: 40px; width: 900px; height: 772px; box-sizing: border-box; border-radius: 20px; }
+.sliver.left { left: -882px; background: var(--left-sliver-bg); border: 1px solid var(--left-sliver-border); }
+.sliver.right { right: -882px; background: var(--right-sliver-bg); border: 1px solid var(--right-sliver-border); }
+.card { left: 245px; background: var(--card-bg); border: 1px solid var(--card-border); padding: var(--card-padding); display: flex; flex-direction: column; justify-content: flex-start; gap: 14px; }
+.msg { margin: 0; padding: 10px 16px; border: var(--box-border); border-radius: var(--box-radius); font-family: var(--font); }
+.explorer { align-self: flex-start; max-width: 72%; background: var(--explorer-bg); font-size: var(--explorer-size); line-height: var(--explorer-leading); }
+.pretender { align-self: flex-end; max-width: 88%; background: var(--pretender-bg); font-size: var(--pretender-size); line-height: var(--pretender-leading); white-space: pre-wrap; }
+
+.secret { color: var(--secret-ink); font-weight: 500; border-radius: 3px; background: linear-gradient(100deg, transparent 35%, var(--secret-sheen) 50%, transparent 65%); background-size: 300% 100%; animation: sheen 2s ease-in-out infinite; }
+@keyframes sheen { from { background-position: 100% 0; } to { background-position: 0 0; } }
+
+.cursor { display: inline-block; width: 0.6em; height: 2px; vertical-align: -0.1em; background: var(--ink); animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="frame">
+    <div class="sliver left"></div>
+    <div class="sliver right"></div>
+    <div class="card">
+      <div class="msg explorer">Hello?</div>
+      <pre class="msg pretender">bash: Hello?: command not found</pre>
+      <div class="msg explorer">ls -la</div>
+      <pre class="msg pretender">-rw-r--r-- 1 root root   57 Oct 16 09:12 README
+drwxr-xr-x 2 root root 4096 Oct 16 09:12 vault</pre>
+      <div class="msg explorer">ls vault</div>
+      <pre class="msg pretender"><span class="secret">velvet-otter-hu</span>ms-quietly.txt</pre>
+      <div class="msg explorer"><span class="secret">velvet-otter-hu</span><span class="cursor"></span></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

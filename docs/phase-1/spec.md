@@ -27,7 +27,7 @@ What must be true when Phase 1 is done. Each requirement can be checked from the
 - **S3.1** Each Session gets a new Secret of the form adjective-noun-verb-adverb, e.g. `velvet-otter-hums-quietly`.
 - **S3.2** Secrets contain no offensive words.
 - **S3.3** Only the Pretender is given the Secret.
-- **S3.4** Viewers see the instructions given to the Explorer at the start of each Session, and never those given to the Pretender.
+- **S3.4** Viewers never see the instructions given to either model. They discover what is happening by watching.
 - **S3.5** The exhibition never reveals the Secret itself. Viewers see it only if it appears in the Session.
 
 ## 4. Viewing
