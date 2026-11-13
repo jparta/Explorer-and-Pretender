@@ -125,3 +125,13 @@ Decisions are made by the project author. AI assistants helped research options 
 **Why:** Hono is lightweight but brings the essentials: an SSE helper that handles formatting, disconnects and keep-alive pings, ready-made middleware, and route tests without a running server. It is built on web standards, so the same code runs on Node, Bun and other runtimes, and the runtime can be changed by swapping an adapter.
 
 **Sources:** [Hono streaming helpers](https://hono.dev/docs/helpers/streaming), [the story of Hono, from its creator](https://www.plushcap.com/content/cloudflare/blog/cloudflare-the-story-of-web-framework-hono-from-the-creator-of-hono) (checked November 2026).
+
+## D15 — Bun as the runtime
+
+**Decision:** Run the web server and runner on Bun.
+
+**Alternatives:** Node.js 26 LTS; Deno.
+
+**Why:** One tool covers installing, running and testing, so the setup is simpler. Bun also brings new ideas worth having experience with. This is not a project that must avoid downtime, so Bun's support model is acceptable: only the newest 1.x release gets fixes, and upgrades inside 1.x have occasionally changed behaviour. Leaving Bun later would take about a day, since Hono (D14) runs on Node by swapping its adapter. Deno was ruled out because its team joined Cloudflare in October 2026 and independent runtime development is set to end about a year later. Bun is owned by Anthropic, whose model helped research this choice.
+
+**Sources:** [Bun security policy](https://www.GitHub.com/oven-sh/bun/security), [Bun v1.1.27 release notes](https://bun.com/blog/bun-v1.1.27), [Node.js release schedule](https://nodejs.org/fr/blog/announcements/evolving-the-nodejs-release-schedule), [Deno team joins Cloudflare](https://alternativeto.net/news/2026/10/deno-team-joins-cloudflare-as-runtime-development-winds-down/) (checked November 2026).
