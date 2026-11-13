@@ -97,3 +97,21 @@ Decisions are made by the project author. AI assistants helped research options 
 **Alternatives:** The provider's key limit alone, with no count of our own.
 
 **Why:** Safer. The key limit lives in the provider's dashboard, outside the repo, so a key created without one would leave only the prepaid balance as a cap. With both, either one holds if the other fails, and the prepaid balance remains the absolute ceiling. Cost: a counter to store, reset at midnight UTC and keep correct across restarts.
+
+## D12 — TypeScript for the whole stack
+
+**Decision:** Write the front end, web server and runner in TypeScript.
+
+**Alternatives:** A different language for the back end (for example Go or Python), with TypeScript only in the front end.
+
+**Why:** TypeScript is mature for front-end work, and one language across the stack lets the front end and back end share types, above all the Session event payload (see D9).
+
+## D13 — The `openai` package as the LLM client
+
+**Decision:** The runner calls OpenRouter through the official `openai` npm package, with its base URL set to OpenRouter.
+
+**Alternatives:** OpenRouter's own SDK (`@openrouter/sdk`); the Vercel AI SDK with its OpenRouter provider.
+
+**Why:** It is the most mature of the three, and it keeps the code on the OpenAI-compatible API the spec requires, so moving away from OpenRouter means changing only the address. OpenRouter's SDK is still in beta, and the Vercel AI SDK brings far more than the runner needs. Cost: OpenRouter's extra response fields, such as each call's cost, are missing from the package's types, so we add a small type for them.
+
+**Sources:** [OpenRouter usage accounting](https://openrouter.ai/docs/cookbook/administration/usage-accounting.md), [OpenRouter TypeScript SDK (beta)](https://openrouter.ai/docs/client-sdks/typescript/overview.md) (checked November 2026).
