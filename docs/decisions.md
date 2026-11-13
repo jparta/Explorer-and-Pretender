@@ -158,7 +158,7 @@ Decisions are made by the project author. AI assistants helped research options 
 
 ## D18 — Valkey as the data store
 
-**Decision:** Use Valkey, the Linux Foundation's fork of Redis, for the store shared by the runner and the web server (D3).
+**Decision:** Use Valkey, the Linux Foundation's fork of Redis, for the store shared by the runner and the web server (D3), in place of Redis.
 
 **Alternatives:** Redis 8.
 
@@ -170,10 +170,18 @@ Decisions are made by the project author. AI assistants helped research options 
 
 **Decision:** The runner appends each Session's events to a Valkey Stream of its own. The web server reads them from there. The stream is deleted when the Session ends, and a length limit guards against a runaway Session.
 
-**Alternatives:** Pub/sub, which delivers each message to whoever is subscribed at that moment and stores nothing.
+**Alternatives:** Pub/sub, which delivers each message to whoever is subscribed at that moment and stores nothing. D3 originally named pub/sub; this replaces it.
 
 **Why:** A stream keeps events until it is deleted, so nothing is lost while a web server pod restarts or a viewer's connection drops: the browser reconnects with the ID of the last event it saw (SSE's `Last-Event-ID`) and reading resumes from there, on whichever pod answers. Gaps like that would look glitchy, and rolling updates make restarts routine. A viewer who joins mid-message can be shown that message from its start instead of mid-sentence. And keeping finished streams would make replaying Sessions from the beginning possible later. One Session's stream is roughly 120 KB, so storage is not a concern.
 
 **Cost:** More code and concepts than pub/sub: entry IDs, blocking reads, trimming and deleting. Streams make smooth reconnects possible, not automatic; the web server and client still have to pass IDs along correctly. They do not help when the runner restarts: the Session itself is then interrupted.
 
 **Sources:** [Valkey Streams introduction](https://valkey.io/topics/streams-intro/), [Server-sent events and `Last-Event-ID` (HTML standard)](https://html.spec.whatwg.org/multipage/server-sent-events.html) (checked November 2026).
+
+## D20 — The web server serves the front end
+
+**Decision:** Hono, in the web server, serves the front end's built files (D16) alongside the API and SSE.
+
+**Alternatives:** A separate static file server (nginx or Caddy) in its own pod; a CDN or object storage.
+
+**Why:** This is a small app, and it is much simpler without another server. The components stay the three of D3, the browser talks to a single address, so no routing or CORS is needed in Phase 1, and it fits Bun's dev server, which is built around the server serving the page. Cost: every front-end change replaces the web pod, which D19 makes harmless to viewers, and the front end and server cannot be deployed separately.
