@@ -168,13 +168,13 @@ Decisions are made by the project author. AI assistants helped research options 
 
 ## D19 — Valkey Streams for Session events, one stream per Session
 
-**Decision:** The runner appends each Session's events to a Valkey Stream of its own. The web server reads them from there. The stream is deleted when the Session ends, and a length limit guards against a runaway Session.
+**Decision:** The runner appends each Session's events to a Valkey Stream of its own. The web server reads them from there. The stream expires one minute after the Session ends, so a viewer who reconnects just then still gets the ending, and a length limit guards against a runaway Session.
 
 **Alternatives:** Pub/sub, which delivers each message to whoever is subscribed at that moment and stores nothing. D3 originally named pub/sub; this replaces it.
 
 **Why:** A stream keeps events until it is deleted, so nothing is lost while a web server pod restarts or a viewer's connection drops: the browser reconnects with the ID of the last event it saw (SSE's `Last-Event-ID`) and reading resumes from there, on whichever pod answers. Gaps like that would look glitchy, and rolling updates make restarts routine. A viewer who joins mid-message can be shown that message from its start instead of mid-sentence. And keeping finished streams would make replaying Sessions from the beginning possible later. One Session's stream is roughly 120 KB, so storage is not a concern.
 
-**Cost:** More code and concepts than pub/sub: entry IDs, blocking reads, trimming and deleting. Streams make smooth reconnects possible, not automatic; the web server and client still have to pass IDs along correctly. They do not help when the runner restarts: the Session itself is then interrupted.
+**Cost:** More code and concepts than pub/sub: entry IDs, blocking reads, trimming and expiry. Streams make smooth reconnects possible, not automatic; the web server and client still have to pass IDs along correctly. They do not help when the runner restarts: the Session itself is then interrupted.
 
 **Sources:** [Valkey Streams introduction](https://valkey.io/topics/streams-intro/), [Server-sent events and `Last-Event-ID` (HTML standard)](https://html.spec.whatwg.org/multipage/server-sent-events.html) (checked November 2026).
 
@@ -188,7 +188,7 @@ Decisions are made by the project author. AI assistants helped research options 
 
 ## D21 — Presence reported by a heartbeat request, kept as expiring keys
 
-**Decision:** Each open page holds one SSE connection that carries all slots' events and their status. Separately, while its tab is active, the page sends `POST /presence` with the slot in focus whenever focus or visibility changes and every few seconds otherwise. The web server records presence and watching as Valkey keys that expire after a few seconds unless refreshed, and starts a Session when a watched slot is idle. The key names and expiry times live in the shared package (D9), so the web server and runner use the same definitions.
+**Decision:** Each open page holds one SSE connection that carries all slots' events and their status. Separately, while its tab is active, the page sends `POST /presence` with the slot in focus whenever focus or visibility changes and every few seconds otherwise. The web server records presence and watching as Valkey keys that expire unless refreshed. The runner reads them: it starts a Session when a watched slot is idle, and stops running Sessions when nobody is present. The key names and expiry times live in the shared package (D9), so the web server and runner use the same definitions.
 
 **Alternatives:** Treating an open SSE connection as presence; putting the focused slot in the SSE address; counting viewers with a counter that goes up and down.
 
