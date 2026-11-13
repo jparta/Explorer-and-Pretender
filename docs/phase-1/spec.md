@@ -17,9 +17,9 @@ What must be true when Phase 1 is done. Each requirement can be checked from the
 - **S2.3** *Found:* the Session ends when an Explorer message contains the Secret exactly as given.
 - **S2.4** *Ran its course:* the Session ends after 15 exchanges without the Secret being found.
 - **S2.5** *Interrupted:* if the model provider keeps failing, the Session ends as interrupted.
-- **S2.6** A slot starts a new Session only when someone is watching it (S4.4). If it isn't already running, a Session starts anew.
-- **S2.7** If nobody watches a running Session for 30 seconds, it stops.
-- **S2.8** After a Session ends, the slot pauses (10 seconds) before starting the next one, if anyone is still watching.
+- **S2.6** A Session starts in a slot only when someone is watching that slot (S4.4) and it is idle.
+- **S2.7** A running Session continues while any viewer is present (S4.4), whichever slot they are watching. If no viewer is present for 30 seconds, it stops.
+- **S2.8** After a Session ends, the slot pauses (10 seconds). Then, if someone is watching the slot, the next Session starts; otherwise the slot is idle.
 - **S2.9** A finished Session can't be viewed again.
 
 ## 3. The Secret
@@ -37,8 +37,8 @@ What must be true when Phase 1 is done. Each requirement can be checked from the
 - **S4.1** The slots sit in a row that scrolls horizontally and loops seamlessly. Exactly one slot is in focus at a time.
 - **S4.2** When scrolling stops, the row snaps to the nearest slot. Arrow keys move one slot at a time.
 - **S4.3** Neighbouring slots show only as a very subtle sliver at the edges. Nothing tells how many slots there are; only comparing their contents reveals it.
-- **S4.4** A viewer is watching a slot when it is in focus in an active browser tab.
-- **S4.5** A new visitor lands on an idle slot if there is one.
+- **S4.4** A viewer is *present* while the exhibition is open in an active browser tab. A present viewer is *watching* the slot in focus.
+- **S4.5** A new visitor lands on an idle slot if there is one, otherwise on the first slot.
 - **S4.6** An idle slot shows that it is waiting for someone to watch.
 
 **Watching a Session**
