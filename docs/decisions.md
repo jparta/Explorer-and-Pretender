@@ -155,3 +155,25 @@ Decisions are made by the project author. AI assistants helped research options 
 **Why:** It comes with Bun, so there is nothing extra to install in images or on a developer's machine, and it covers most of what pnpm does: workspaces, isolated installs (the default for new workspaces) and blocking dependencies' install scripts unless they are trusted.
 
 **Sources:** [bun install](https://bun.com/docs/pm/cli/install), [isolated installs](https://bun.com/docs/install/isolated), [Bun v1.3.2 release notes](https://bun.com/blog/bun-v1.3.2) (checked November 2026).
+
+## D18 — Valkey as the data store
+
+**Decision:** Use Valkey, the Linux Foundation's fork of Redis, for the store shared by the runner and the web server (D3).
+
+**Alternatives:** Redis 8.
+
+**Why:** Open-source development of the Redis code base is now concentrated in Valkey, and the Linux Foundation, which owns the project, is a neutral home whose stewardship we trust: no single company can change the licence, as Redis Ltd. did in 2024. For the commands this project uses the two are the same, so switching later is an image change.
+
+**Sources:** [Redis vs Valkey: understanding the fork](https://oneuptime.com/blog/post/2026-03-31-redis-redis-vs-valkey-understanding-the-fork/view), [Redis lost most of its external contributors](https://devclass.com/2025/04/01/one-year-ago-redis-changed-its-license-and-lost-most-of-its-external-contributors/), [Valkey vs Redis in 2026](https://betterstack.com/community/comparisons/redis-vs-valkey/) (checked November 2026).
+
+## D19 — Valkey Streams for Session events, one stream per Session
+
+**Decision:** The runner appends each Session's events to a Valkey Stream of its own. The web server reads them from there. The stream is deleted when the Session ends, and a length limit guards against a runaway Session.
+
+**Alternatives:** Pub/sub, which delivers each message to whoever is subscribed at that moment and stores nothing.
+
+**Why:** A stream keeps events until it is deleted, so nothing is lost while a web server pod restarts or a viewer's connection drops: the browser reconnects with the ID of the last event it saw (SSE's `Last-Event-ID`) and reading resumes from there, on whichever pod answers. Gaps like that would look glitchy, and rolling updates make restarts routine. A viewer who joins mid-message can be shown that message from its start instead of mid-sentence. And keeping finished streams would make replaying Sessions from the beginning possible later. One Session's stream is roughly 120 KB, so storage is not a concern.
+
+**Cost:** More code and concepts than pub/sub: entry IDs, blocking reads, trimming and deleting. Streams make smooth reconnects possible, not automatic; the web server and client still have to pass IDs along correctly. They do not help when the runner restarts: the Session itself is then interrupted.
+
+**Sources:** [Valkey Streams introduction](https://valkey.io/topics/streams-intro/), [Server-sent events and `Last-Event-ID` (HTML standard)](https://html.spec.whatwg.org/multipage/server-sent-events.html) (checked November 2026).
