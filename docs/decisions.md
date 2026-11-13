@@ -63,3 +63,37 @@ Decisions are made by the project author. AI assistants helped research options 
 **Why:** The cluster is defined in a config file in the repo, which is good developer experience and shows reviewers exactly what runs. kind is the standard choice for Kubernetes in CI/CD (e.g. GitHub Actions). Docker Desktop's cluster mainly saves image loading, which Tilt does automatically for kind. minikube has handy add-ons, but they won't be available on k3s in the prod deployment anyway. We'll install what we need ourselves, portably.
 
 **Note:** Docker Desktop is still needed as the engine kind runs on.
+
+## D8 — OpenRouter as the LLM provider
+
+**Decision:** Call the models through OpenRouter.
+
+**Alternatives:** Each model's own provider directly (Anthropic, OpenAI, DeepSeek, …).
+
+**Why:** One key and one OpenAI-compatible API reach every candidate model, which suits trial runs across several. Each response reports its own cost, and a key can carry a daily spending limit that resets at midnight UTC. The spec's OpenAI-compatible constraint keeps switching away possible.
+
+**Sources:** [key limits and resets](https://openrouter.ai/docs/api/api-reference/api-keys/create-a-new-api-key.md), [cost in every response](https://openrouter.ai/docs/use-cases/usage-accounting) (checked November 2026).
+
+## D9 — One repository with workspaces
+
+**Decision:** Keep the front end, web server, runner and shared code in one repository as separate workspaces.
+
+**Alternatives:** Separate folders without shared packages; separate repositories.
+
+**Why:** Shared code, above all the Session event types, lives in one package that every part imports, so a change to an event is checked everywhere at once.
+
+## D10 — Kustomize for Kubernetes manifests
+
+**Decision:** Write the manifests as a Kustomize base plus overlays.
+
+**Alternatives:** Plain YAML, Helm.
+
+**Why:** Kustomize is built into `kubectl` and keeps the manifests plain YAML. A shared base with small overlays for the local cluster and, in Phase 3, the cloud avoids duplicating them. Helm's templating and packaging are more than one app needs.
+
+## D11 — The exhibition counts spend, the provider limit backs it up
+
+**Decision:** The exhibition counts each call's reported cost against the daily $2 cap. The API key's daily limit at the provider, 10% above the cap, is a backstop. The margin lets running Sessions finish after the cap is reached.
+
+**Alternatives:** The provider's key limit alone, with no count of our own.
+
+**Why:** Safer. The key limit lives in the provider's dashboard, outside the repo, so a key created without one would leave only the prepaid balance as a cap. With both, either one holds if the other fails, and the prepaid balance remains the absolute ceiling. Cost: a counter to store, reset at midnight UTC and keep correct across restarts.

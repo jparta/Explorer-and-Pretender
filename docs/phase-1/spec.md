@@ -7,7 +7,7 @@ What must be true when Phase 1 is done. Each requirement can be checked from the
 ## 1. Getting it running
 
 - **S1.1** From a fresh clone, with the prerequisites installed, the exhibition is running and viewable in a browser after at most two commands.
-- **S1.2** The README lists the prerequisites and the exact steps from clone to running exhibition, including where the LLM API key goes.
+- **S1.2** The README lists the prerequisites and the exact steps from clone to running exhibition, including where the LLM API key goes and that the key is created with a daily limit (S6.3).
 - **S1.3** The API key is read from a local `.env` file, which is never committed.
 
 ## 2. Sessions
@@ -57,7 +57,6 @@ What must be true when Phase 1 is done. Each requirement can be checked from the
 - **S4.15** *Found:* as the Explorer types the Secret, it shimmers gold, the shimmer growing with each character. In step, the same characters light up wherever the Secret appeared earlier in the Pretender's output. The shimmer stays as long as the Secret is on screen.
 - **S4.16** *Ran its course* and *interrupted* are shown in a grey box, distinct from the message boxes, horizontally centred directly below the last message and scrolling with the chat. The box says why the Session ended: "This Session has run its course" or "This Session was unexpectedly interrupted".
 - **S4.17** After the Secret is found, the shimmer lingers, then the slot fades to black in a few discrete steps, like old adventure games, before the next Session starts. The other two endings fade the same way, once the grey box has been readable for a moment.
-- **S4.18** When the daily spend cap is reached, viewers see that the exhibition is resting until tomorrow.
 
 ## 5. Constraints
 
@@ -68,11 +67,11 @@ What must be true when Phase 1 is done. Each requirement can be checked from the
 
 ## 6. Cost limits
 
-- **S6.1** Daily spend cap: $2. Once reached, no new Sessions start until the day resets at midnight UTC. Sessions already running finish.
-- **S6.2** Spend counts the cost the provider reports for each call.
-- **S6.3** The API key also has a daily limit at the provider, set slightly above the cap, as a backstop. Hitting it shows the same resting notice (S4.18).
+- **S6.1** Daily spend cap: $2, counted by the exhibition from the cost the provider reports for each call. The count resets at midnight UTC.
+- **S6.2** When the cap is reached, the machine sleeps until the day resets: no new Sessions start, and Sessions already running finish. Once a slot has nothing running, it shows a notice saying "Machine is sleeping, come back tomorrow" in place of the waiting state. If the provider's key limit (S6.3) is reached first, a running Session cannot continue: it stops, and the same notice appears below its last message. The notice is friendlier than the grey ending box, looks the way the slot's style dictates, and stays until the day resets, without fading.
+- **S6.3** The API key also has a daily limit at the provider, 10% above the cap, as a backstop in case the exhibition's count goes wrong. The margin leaves room for running Sessions to finish after the cap is reached.
 - **S6.4** The provider account runs on prepaid credit without automatic top-up, so the balance is the absolute ceiling.
-- **S6.5** The current day's spend shows in the logs.
+- **S6.5** Each call's reported cost and the day's running total show in the logs.
 
 ## 7. Configuration
 
@@ -85,6 +84,7 @@ What must be true when Phase 1 is done. Each requirement can be checked from the
 | Reveal rate, Explorer / Pretender | 30 / 120 characters per second |
 | Maximum message length | after trial runs |
 | Daily spend cap | $2 |
+| Provider key daily limit | 10% above the cap |
 | Models and endpoint | per provider |
 
 ## 8. Not in Phase 1
