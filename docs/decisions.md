@@ -136,15 +136,15 @@ Decisions are made by the project author. AI assistants helped research options 
 
 **Sources:** [Bun security policy](https://www.GitHub.com/oven-sh/bun/security), [Bun v1.1.27 release notes](https://bun.com/blog/bun-v1.1.27), [Node.js release schedule](https://nodejs.org/fr/blog/announcements/evolving-the-nodejs-release-schedule), [Deno team joins Cloudflare](https://alternativeto.net/news/2026/10/deno-team-joins-cloudflare-as-runtime-development-winds-down/) (checked November 2026).
 
-## D16 — Vite for the front end, running on Bun
+## D16 — Bun builds the front end
 
-**Decision:** Develop and build the React front end with Vite, run by Bun.
+**Decision:** Develop and build the React front end with Bun's own tools: its dev server with hot reloading during development, and its bundler (`bun build`) for production.
 
-**Alternatives:** Bun's own full-stack dev server.
+**Alternatives:** Vite, run by Bun.
 
-**Why:** Vite keeps the front end separate from the web server, which leaves more freedom in how the front end is delivered and developed. It is mature and the common default for React. Cost: one more tool than Bun alone.
+**Why:** One less moving part: Bun already runs, tests and installs everything else. Vite is more mature and has more plugins, but a single React page doesn't need them. Cost: Bun's front-end tooling is younger, and its dev server is built around the server code importing the page. Switching to Vite later is possible since the React code itself doesn't change.
 
-**Sources:** [Bun full-stack dev server](https://bun.com/docs/bundler/fullstack), [Bun vs Vite (Vercel)](https://vercel.com/i/bun-vs-vite) (checked November 2026).
+**Sources:** [Bun full-stack dev server](https://bun.com/docs/bundler/fullstack), [Bun hot reloading](https://bun.com/docs/bundler/hmr), [Bun vs Vite (Vercel)](https://vercel.com/i/bun-vs-vite) (checked November 2026).
 
 ## D17 — `bun install` as the package manager
 
