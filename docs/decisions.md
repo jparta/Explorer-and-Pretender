@@ -185,3 +185,11 @@ Decisions are made by the project author. AI assistants helped research options 
 **Alternatives:** A separate static file server (nginx or Caddy) in its own pod; a CDN or object storage.
 
 **Why:** This is a small app, and it is much simpler without another server. The components stay the three of D3, the browser talks to a single address, so no routing or CORS is needed in Phase 1, and it fits Bun's dev server, which is built around the server serving the page. Cost: every front-end change replaces the web pod, which D19 makes harmless to viewers, and the front end and server cannot be deployed separately.
+
+## D21 — Presence reported by a heartbeat request, kept as expiring keys
+
+**Decision:** Each open page holds one SSE connection that carries all slots' events and their status. Separately, while its tab is active, the page sends `POST /presence` with the slot in focus whenever focus or visibility changes and every few seconds otherwise. The web server records presence and watching as Valkey keys that expire after a few seconds unless refreshed, and starts a Session when a watched slot is idle. The key names and expiry times live in the shared package (D9), so the web server and runner use the same definitions.
+
+**Alternatives:** Treating an open SSE connection as presence; putting the focused slot in the SSE address; counting viewers with a counter that goes up and down.
+
+**Why:** A background tab keeps its connection open so its Session keeps appearing (spec S4.9) but is not present, so the connection cannot be the signal. Putting the focus in the address would mean reconnecting on every focus change. Expiring keys repair themselves: a web pod that crashes never gets to decrease a counter, which would stay wrong, while a key it stops refreshing simply expires. One endpoint covers both keeping Sessions alive and starting them, and slot status reaches the page over the SSE connection it already has.
