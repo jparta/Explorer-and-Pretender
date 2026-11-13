@@ -135,3 +135,23 @@ Decisions are made by the project author. AI assistants helped research options 
 **Why:** One tool covers installing, running and testing, so the setup is simpler. Bun also brings new ideas worth having experience with. This is not a project that must avoid downtime, so Bun's support model is acceptable: only the newest 1.x release gets fixes, and upgrades inside 1.x have occasionally changed behaviour. Leaving Bun later would take about a day, since Hono (D14) runs on Node by swapping its adapter. Deno was ruled out because its team joined Cloudflare in October 2026 and independent runtime development is set to end about a year later. Bun is owned by Anthropic, whose model helped research this choice.
 
 **Sources:** [Bun security policy](https://www.GitHub.com/oven-sh/bun/security), [Bun v1.1.27 release notes](https://bun.com/blog/bun-v1.1.27), [Node.js release schedule](https://nodejs.org/fr/blog/announcements/evolving-the-nodejs-release-schedule), [Deno team joins Cloudflare](https://alternativeto.net/news/2026/10/deno-team-joins-cloudflare-as-runtime-development-winds-down/) (checked November 2026).
+
+## D16 — Vite for the front end, running on Bun
+
+**Decision:** Develop and build the React front end with Vite, run by Bun.
+
+**Alternatives:** Bun's own full-stack dev server.
+
+**Why:** Vite keeps the front end separate from the web server, which leaves more freedom in how the front end is delivered and developed. It is mature and the common default for React. Cost: one more tool than Bun alone.
+
+**Sources:** [Bun full-stack dev server](https://bun.com/docs/bundler/fullstack), [Bun vs Vite (Vercel)](https://vercel.com/i/bun-vs-vite) (checked November 2026).
+
+## D17 — `bun install` as the package manager
+
+**Decision:** Manage packages and workspaces with `bun install`.
+
+**Alternatives:** pnpm.
+
+**Why:** It comes with Bun, so there is nothing extra to install in images or on a developer's machine, and it covers most of what pnpm does: workspaces, isolated installs (the default for new workspaces) and blocking dependencies' install scripts unless they are trusted.
+
+**Sources:** [bun install](https://bun.com/docs/pm/cli/install), [isolated installs](https://bun.com/docs/install/isolated), [Bun v1.3.2 release notes](https://bun.com/blog/bun-v1.3.2) (checked November 2026).
