@@ -115,3 +115,13 @@ Decisions are made by the project author. AI assistants helped research options 
 **Why:** It is the most mature of the three, and it keeps the code on the OpenAI-compatible API the spec requires, so moving away from OpenRouter means changing only the address. OpenRouter's SDK is still in beta, and the Vercel AI SDK brings far more than the runner needs. Cost: OpenRouter's extra response fields, such as each call's cost, are missing from the package's types, so we add a small type for them.
 
 **Sources:** [OpenRouter usage accounting](https://openrouter.ai/docs/cookbook/administration/usage-accounting.md), [OpenRouter TypeScript SDK (beta)](https://openrouter.ai/docs/client-sdks/typescript/overview.md) (checked November 2026).
+
+## D14 — Hono for the API and SSE
+
+**Decision:** The web server's API and SSE endpoints use Hono.
+
+**Alternatives:** The runtime's own server alone (for example `Bun.serve`), Express 5, Fastify 5.
+
+**Why:** Hono is lightweight but brings the essentials: an SSE helper that handles formatting, disconnects and keep-alive pings, ready-made middleware, and route tests without a running server. It is built on web standards, so the same code runs on Node, Bun and other runtimes, and the runtime can be changed by swapping an adapter.
+
+**Sources:** [Hono streaming helpers](https://hono.dev/docs/helpers/streaming), [the story of Hono, from its creator](https://www.plushcap.com/content/cloudflare/blog/cloudflare-the-story-of-web-framework-hono-from-the-creator-of-hono) (checked November 2026).
