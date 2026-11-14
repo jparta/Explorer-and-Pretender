@@ -111,7 +111,7 @@ type SlotStatus = {
 
 - `idle`: the slot shows that it is waiting for someone to watch (S4.6).
 - `running`: a Session is running.
-- `intermission`: the 10 seconds between Sessions (S2.8). The browser plays the fade to black (S4.17).
+- `intermission`: the 10 seconds between Sessions (S2.8). The fade to black (S4.17) is triggered by the Session's `session-end` event, not by this state; the state tells a viewer who arrives meanwhile that a Session has just ended and the slot isn't idle.
 - `sleeping`: the slot shows "Machine is sleeping, come back tomorrow" (S6.2).
 
 ### 4.3 What the browser receives
