@@ -19,7 +19,7 @@ Decisions are recorded project-wide in `docs/decisions.md`.
 4. Architecture
 5. Dev environment: kind config, a minimal Tiltfile, README setup steps
 6. For each component: its doc, then its code
-7. Tilt setup and README polish, including what the project demonstrates and how to try it
+7. Tilt setup and README polish, including what the project demonstrates and how to try it, and why Kubernetes: control over the network between components, over resource use, and over how updates and restarts happen; desired state kept in git; self-healing; components finding each other by name; the same manifests locally and in the cloud; and, plainly, that an app this small doesn't need Kubernetes and it is here to learn and show it
 8. Tag `phase-1`
 
 Each commit has one clear purpose and is small enough to review in full.
