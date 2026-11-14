@@ -1,6 +1,6 @@
 # Phase 1 — Spec
 
-What must be true when Phase 1 is done. Each requirement can be checked from the outside; how it's built belongs in the architecture doc. **Decision needed** marks a choice that is still open.
+What must be true when Phase 1 is done. Each requirement can be checked from the outside; how it's built belongs in the architecture doc. **Decision needed** marks a choice that is still open. Terms are used as the [glossary](../glossary.md) defines them.
 
 **Scope:** the whole exhibition runs on a local Kubernetes cluster on the developer's machine. Routing, Sessions as Jobs and public hosting come in later phases.
 
@@ -13,13 +13,13 @@ What must be true when Phase 1 is done. Each requirement can be checked from the
 ## 2. Sessions
 
 - **S2.1** There are 3 slots. Each slot shows at most one Session at a time.
-- **S2.2** A Session alternates messages: the Explorer writes, the Pretender answers as a terminal would. The Explorer goes first. One Explorer message plus the Pretender's answer is one exchange.
+- **S2.2** A Session alternates messages: the Explorer writes, the Pretender answers as a terminal would. The Explorer goes first.
 - **S2.3** *Found:* the Session ends when an Explorer message contains the Secret exactly as given.
 - **S2.4** *Ran its course:* the Session ends after 15 exchanges without the Secret being found.
 - **S2.5** *Interrupted:* if the model provider keeps failing, the Session ends as interrupted.
-- **S2.6** A Session starts in a slot only when someone is watching that slot (S4.4) and it is idle.
-- **S2.7** A running Session continues while any viewer is present (S4.4), whichever slot they are watching. If no viewer is present for 30 seconds, it stops.
-- **S2.8** After a Session ends, the slot pauses (10 seconds). Then, if someone is watching the slot, the next Session starts; otherwise the slot is idle.
+- **S2.6** A Session starts in a slot only when someone is watching that slot and it is idle.
+- **S2.7** A running Session continues while any viewer is present, whichever slot they are watching. If no viewer is present for 30 seconds, it stops.
+- **S2.8** After a Session ends, the slot has an intermission (10 seconds). Then, if someone is watching the slot, the next Session starts; otherwise the slot is idle.
 - **S2.9** A finished Session can't be viewed again.
 
 ## 3. The Secret
@@ -37,14 +37,14 @@ What must be true when Phase 1 is done. Each requirement can be checked from the
 - **S4.1** The slots sit in a row that scrolls horizontally and loops seamlessly. Exactly one slot is in focus at a time.
 - **S4.2** When scrolling stops, the row snaps to the nearest slot. Arrow keys move one slot at a time.
 - **S4.3** Neighbouring slots show only as a very subtle sliver at the edges. Nothing tells how many slots there are; only comparing their contents reveals it.
-- **S4.4** A viewer is *present* while the exhibition is open in an active browser tab. A present viewer is *watching* the slot in focus.
+- **S4.4** *Moved to the glossary: present, watching.*
 - **S4.5** A new visitor lands on an idle slot if there is one, otherwise on the first slot.
 - **S4.6** An idle slot shows that it is waiting for someone to watch.
 
 **Watching a Session**
 
 - **S4.7** Viewing is read-only: nothing a viewer does reaches a Session.
-- **S4.8** A viewer who joins a running Session sees only the messages that arrived since they joined.
+- **S4.8** A viewer who joins a running Session sees it from the start of the message in progress.
 - **S4.9** While the tab is in the background, the Session keeps appearing at its normal pace, and the 30-second limit (S2.7) runs meanwhile. A returning viewer's view stays where they left it; they can scroll down to the latest text.
 - **S4.10** Text appears one character at a time at a steady rate: about 30 characters per second for the Explorer and about 120 for the Pretender.
 - **S4.11** The display never hurries or catches up.
@@ -79,7 +79,7 @@ What must be true when Phase 1 is done. Each requirement can be checked from the
 |---|---|
 | Slots | 3 |
 | Turn cap | 15 exchanges |
-| Pause between Sessions | 10 s |
+| Intermission between Sessions | 10 s |
 | Time without viewers before a Session stops | 30 s |
 | Reveal rate, Explorer / Pretender | 30 / 120 characters per second |
 | Maximum message length | after trial runs |
