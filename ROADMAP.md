@@ -14,6 +14,7 @@
 - [ ] A session controller creates the Jobs, with least-privilege RBAC
 - [ ] Traffic enters through the Gateway API
 - [ ] A scripted stand-in model runs the exhibition without an API key
+- [ ] A Session survives a restart of its Job's pod: it resumes where it was instead of being interrupted
 
 ## Phase 3 — Public, in the cloud
 
@@ -26,3 +27,4 @@
 ## Ideas, not promises
 
 - New spectators see each Session from its start, replayed quickly and easing into live speed. This would make the experience slightly more interactive, which would detract from the mood of the exhibition.
+- Variants within a kind: the terminal pretends to be different operating systems, the open world stages different scenes (a Wild West town, …), and the Pretender hides the Secret in different kinds of places.
