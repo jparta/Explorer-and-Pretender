@@ -193,3 +193,59 @@ Decisions are made by the project author. AI assistants helped research options 
 **Alternatives:** Treating an open SSE connection as presence; putting the focused slot in the SSE address; counting viewers with a counter that goes up and down.
 
 **Why:** A background tab keeps its connection open so its Session keeps appearing (spec S4.9) but is not present, so the connection cannot be the signal. Putting the focus in the address would mean reconnecting on every focus change. Expiring keys repair themselves: a web pod that crashes never gets to decrease a counter, which would stay wrong, while a key it stops refreshing simply expires. One endpoint covers both keeping Sessions alive and starting them, and slot status reaches the page over the SSE connection it already has.
+
+## D22 — A runner restart interrupts Sessions in Phase 1; resuming them waits for Phase 2
+
+**Decision:** In Phase 1, when the runner restarts, its running Sessions end as interrupted. Resuming them after a restart is Phase 2 work.
+
+**Alternatives:** Resume Sessions already in Phase 1, rebuilding their history from their streams in Valkey.
+
+**Why:** Phase 2 moves each Session into its own Kubernetes Job, which changes what a restart is: Kubernetes retries a failed Job pod, and resuming is what such a retry needs. Designing it once, together with Jobs, avoids building it twice. Valkey's persistence (D23) keeps the streams that resuming will rebuild from.
+
+## D23 — Valkey keeps an append-only file on a volume
+
+**Decision:** Valkey writes every change to an append-only file (AOF) on a persistent volume, flushed to disk every second.
+
+**Alternatives:** No persistence; periodic snapshots (RDB).
+
+**Why:** Correctness: a Valkey restart loses at most about a second of writes, so the day's spend count survives restarts as D11 requires, and so do Session streams, which resuming in Phase 2 (D22) rebuilds from. Snapshots could lose minutes.
+
+**Sources:** [Valkey persistence](https://valkey.io/topics/persistence/) (checked November 2026).
+
+## D24 — One runner, replaced with the Recreate strategy
+
+**Decision:** The runner runs as a single replica, and its Deployment uses the Recreate strategy: the old pod stops before the new one starts.
+
+**Alternatives:** The default RollingUpdate strategy, which starts the new pod before stopping the old one, with a lock in Valkey so two runners don't drive the same slot.
+
+**Why:** The runner's slot loops assume they are the only ones deciding when a slot starts a Session. Recreate guarantees one runner at a time without any locking. Cost: a few seconds without a runner during each update, and running Sessions are interrupted (D22).
+
+**Sources:** [Deployment strategies](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy) (checked November 2026).
+
+## D25 — Two web replicas
+
+**Decision:** The web Deployment runs two replicas.
+
+**Alternatives:** One replica.
+
+**Why:** It shows that the web pods are stateless: either pod can serve any viewer, and a viewer who reconnects to the other pod continues where they were. Cost: a little more memory.
+
+## D26 — Memory sizes
+
+**Decision:** Each container's memory request equals its limit: 128 MiB for web and runner, 64 MiB for Valkey.
+
+**Alternatives:** No requests or limits; limits above requests.
+
+**Why:** Bun idles at roughly 30–50 MB, and Valkey's data here is a few megabytes, so these leave room while keeping the whole app small enough for a small cloud VM in Phase 3. A request equal to the limit means the scheduler reserves exactly what the container may use, so a node never promises more memory than it has. To be checked against measured usage.
+
+**Sources:** [Resource management for pods and containers](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/) (checked November 2026).
+
+## D27 — Tilt creates the API key's Secret from `.env`
+
+**Decision:** In development, the Tiltfile creates the Kubernetes Secret holding the API key from the `.env` file at the repository root.
+
+**Alternatives:** Kustomize's secretGenerator with `.env` moved into the local overlay's folder; secretGenerator reading the root `.env` with Kustomize's file-loading restriction turned off.
+
+**Why:** `.env` stays at the repository root, which keeps the README's setup steps simple, and nothing about the key ends up in the manifests. Tilt is only used in development, so Phase 3 needs its own way to provide the key.
+
+**Sources:** [Kustomize secretGenerator](https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/secretgenerator/) (checked November 2026).
