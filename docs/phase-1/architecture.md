@@ -141,7 +141,7 @@ On every connection, the web server first sends each slot's current state. Then,
 
 - **The same Session is still running:** the entries after the cursor's position. This is the *catch-up read*.
 - **The cursor's Session has ended but its stream hasn't expired:** the rest of that stream, so the viewer sees the ending. Then the slot's current Session, sent as for a new viewer.
-- **A new viewer, or the stream has expired:** the Session's `session-start` entry, then its latest `message` entry and anything after it. The latest message is the one browsers are revealing, so a viewer who joins mid-message sees it from its start (S4.8).
+- **No position in the slot's current Session:** a page opened while the Session is already running, or a reconnect whose cursor points to a Session that has since ended and expired. The web server sends the Session's `session-start` entry, then its latest `message` entry and anything after it. The latest message is the one browsers are revealing, so the viewer sees it from its start (S4.8); earlier messages aren't shown (spec §8: no recap for late joiners). A viewer who is already connected when a Session starts receives it from `session-start` onwards, live.
 
 The web server's component doc describes how it merges the catch-up read with the live flow without gaps or repeats.
 
