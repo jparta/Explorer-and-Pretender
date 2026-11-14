@@ -272,3 +272,13 @@ Decisions are made by the project author. AI assistants helped research options 
 **Why:** Readiness and liveness answer different questions. Readiness keeps traffic away from a web pod that can't reach Valkey; liveness restarts a container that is stuck. Liveness checks only the container itself, so an outage elsewhere doesn't restart healthy pods. The runner's endpoint catches a hung loop, which no probe would, more simply than a file-based command probe.
 
 **Sources:** [Liveness, readiness and startup probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/) (checked November 2026).
+
+## D30 — CPU requests without limits
+
+**Decision:** Each container requests 50m of CPU (a twentieth of a core) and has no CPU limit.
+
+**Alternatives:** Requests and limits, for example 50m requested and at most 500m.
+
+**Why:** The containers mostly wait on the network, so they are very unlikely to use up the node's CPU. The request makes sure the scheduler can place every pod and, should the node ever run short of CPU, gives each container the same share. Without a limit, a container can use spare CPU freely and is never throttled while the node is idle.
+
+**Sources:** [Resource management for pods and containers](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/) (checked November 2026).

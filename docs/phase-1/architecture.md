@@ -312,12 +312,10 @@ deploy/
 - **valkey:** a StatefulSet with one replica (D28), keeping an append-only file on its volume (D23), reached through a headless Service named `valkey`. kind provides volumes out of the box through its default storage class.
 - **Health checks (D29):** web has readiness on `/readyz` (Valkey answers) and liveness on `/livez` (the process only); valkey uses `valkey-cli ping` for both; the runner has liveness on its own `/livez`, which fails when a slot loop stops ticking.
 - **Memory:** request equal to limit, 128 MiB for web and runner, 64 MiB for Valkey (D26).
+- **CPU:** a request of 50m per container and no limit (D30).
 - **Configuration:** the settings of spec §7 come in as environment variables from a ConfigMap. The Tiltfile creates the API key's Secret from `.env` (D27).
 
 **Development:** in the cluster, the web container runs Bun's dev server with hot reloading. Tilt syncs changed files into the running containers instead of rebuilding images.
-
-**Decision needed (Kubernetes):**
-- **CPU requests and limits.**
 
 ## 12. Prompts
 
