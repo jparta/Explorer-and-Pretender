@@ -282,3 +282,13 @@ Decisions are made by the project author. AI assistants helped research options 
 **Why:** The containers mostly wait on the network, so they are very unlikely to use up the node's CPU. The request makes sure the scheduler can place every pod and, should the node ever run short of CPU, gives each container the same share. Without a limit, a container can use spare CPU freely and is never throttled while the node is idle.
 
 **Sources:** [Resource management for pods and containers](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/) (checked November 2026).
+
+## D31 — The runner writes whole messages
+
+**Decision:** The runner waits until a model has finished its message, then writes the whole message to the Session's stream as one event. It asks the model for the next message as soon as the previous one is written, so generating overlaps with the browser revealing it.
+
+**Alternatives:** Fragments: forwarding the model's output in pieces of about five tokens while it is being generated. This was the earlier plan, agreed in October 2026 but not recorded as a decision. Its reason was that text starts appearing about a second after the model starts, with no wait for the whole message.
+
+**Why:** A message is either in the stream in full or not at all, since one write can't be half done. That keeps resuming after a crash (Phase 2, D22) simple: with fragments, a message cut off midway could only be left unfinished or withdrawn and regenerated, because continuing a partial answer (prefill) is supported by fewer and fewer models. Whole messages also need no streaming from the provider, make the events simpler, let the runner check a message for the Secret before anyone sees it, and give a viewer who joins mid-message the whole message at once. Cost: before each message, the model's full generation time instead of its time to the first word. Mostly that is hidden behind revealing the previous message, but after a short message it shows as a pause; how the pacing evens this out is to be tuned in trial runs.
+
+**Sources:** [OpenRouter API reference (assistant prefill)](https://openrouter.ai/docs/api-reference/overview.md), [Anthropic migration guide (prefill not supported on newer models)](https://platform.claude.com/docs/en/about-claude/models/migration-guide.md) (checked November 2026).
