@@ -249,3 +249,26 @@ Decisions are made by the project author. AI assistants helped research options 
 **Why:** `.env` stays at the repository root, which keeps the README's setup steps simple, and nothing about the key ends up in the manifests. Tilt is only used in development, so Phase 3 needs its own way to provide the key.
 
 **Sources:** [Kustomize secretGenerator](https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/secretgenerator/) (checked November 2026).
+
+## D28 — Valkey runs as a StatefulSet
+
+**Decision:** Valkey runs as a StatefulSet with one replica. Its volume comes from the StatefulSet's volume claim template, and a headless Service gives it a stable name.
+
+**Alternatives:** A Deployment with a separately written PersistentVolumeClaim and the Recreate strategy.
+
+**Why:** A StatefulSet is made for this case: it creates the volume claim itself, gives the pod a stable identity (`valkey-0`) that keeps the same volume across restarts, and never runs two pods with the same identity at once, so two Valkey processes can't write the same file. It is also the standard pattern for databases on Kubernetes, which is worth learning.
+
+**Sources:** [StatefulSets](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/), [headless Services](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services) (checked November 2026).
+
+## D29 — Health checks
+
+**Decision:**
+- **web:** a readiness probe on `/readyz`, which checks that Valkey answers, and a liveness probe on `/livez`, which checks only the process.
+- **valkey:** `valkey-cli ping` for both readiness and liveness.
+- **runner:** a liveness probe on a small `/livez` endpoint of its own, which fails when a slot loop has stopped ticking. It has no readiness probe, since nothing sends it traffic.
+
+**Alternatives:** For the runner, no probe (Kubernetes then only notices if the process exits), or a command probe checking a file the loops touch.
+
+**Why:** Readiness and liveness answer different questions. Readiness keeps traffic away from a web pod that can't reach Valkey; liveness restarts a container that is stuck. Liveness checks only the container itself, so an outage elsewhere doesn't restart healthy pods. The runner's endpoint catches a hung loop, which no probe would, more simply than a file-based command probe.
+
+**Sources:** [Liveness, readiness and startup probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/) (checked November 2026).
