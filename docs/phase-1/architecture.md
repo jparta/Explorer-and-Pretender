@@ -24,7 +24,7 @@ flowchart LR
   browser -- "POST /presence" --> web
   web -- "reads Session streams and slot state,<br/>writes presence keys" --> valkey
   runner -- "writes Session streams and slot state,<br/>reads presence keys" --> valkey
-  runner -- "chat completions (streamed)" --> openrouter
+  runner -- "chat completions" --> openrouter
 ```
 
 **Principles**
@@ -58,7 +58,7 @@ The front end lives inside `apps/web`, because the web server serves it (D20) an
 |---|---|---|---|---|---|
 | `session:{id}` | Stream | runner | web | The Session's events (§4.1), in order | Expires 1 minute after the Session ends (D19). Limited to 10,000 entries as a safety net |
 | `slots` | Stream | runner | web | Changes of slot state (§4.2) | Trimmed to the last 1,000 entries |
-| `slot:{n}` | Hash | runner | web | The current state of slot *n*: `state`, `sessionId`, and `messageEntryId`, the ID of the current message's `message-start` entry in the Session's stream | Permanent, overwritten |
+| `slot:{n}` | Hash | runner | web | The current state of slot *n*: `state` and `sessionId` | Permanent, overwritten |
 | `presence` | String | web | runner | Exists as long as any viewer is present | Expires 30 s after the last heartbeat (S2.7) |
 | `watching:{n}` | String | web | runner | Exists as long as someone watches slot *n* | Expires 10 s after the last heartbeat |
 | `spend:{date}` | String (number) | runner | runner | The day's spend in dollars (D11), with the date in UTC | Expires after 2 days |
@@ -81,16 +81,13 @@ type Role = "explorer" | "pretender";
 
 type SessionEvent =
   | { type: "session-start"; sessionId: string; slot: number; kind: "terminal" }
-  | { type: "message-start"; role: Role }
-  | { type: "text"; text: string }          // a few tokens of the current message (§6.2)
-  | { type: "secret"; secret: string }      // see §6.3
-  | { type: "message-end" }
+  | { type: "message"; role: Role; text: string; secret?: string }  // secret: see §6.3
   | { type: "session-end"; ending: Ending };
 
 type Ending = "found" | "ran-its-course" | "interrupted" | "sleeping";
 ```
 
-`message-start` and `message-end` mark where a message begins and ends, since `text` events are only fragments of it. The browser opens a new message box for the role and later closes it. A viewer who joins mid-message starts at the `message-start` entry.
+Each `message` event holds one whole message (D31). The browser opens a message box for the role and types the text into it (§7).
 
 `found`, `ran-its-course` and `interrupted` are the glossary's three endings. `sleeping` means the provider's key limit stopped the Session partway through; the slot shows the sleeping notice below its last message (S6.2).
 
@@ -144,7 +141,7 @@ On every connection, the web server first sends each slot's current state. Then,
 
 - **The same Session is still running:** the entries after the cursor's position. This is the *catch-up read*.
 - **The cursor's Session has ended but its stream hasn't expired:** the rest of that stream, so the viewer sees the ending. Then the slot's current Session, sent as for a new viewer.
-- **A new viewer, or the stream has expired:** the Session's `session-start` entry, then everything from the current message's `message-start` (`messageEntryId` in `slot:{n}`). A viewer who joins mid-message sees that message from its start (S4.8).
+- **A new viewer, or the stream has expired:** the Session's `session-start` entry, then its latest `message` entry and anything after it. The latest message is the one browsers are revealing, so a viewer who joins mid-message sees it from its start (S4.8).
 
 The web server's component doc describes how it merges the catch-up read with the live flow without gaps or repeats.
 
@@ -186,12 +183,12 @@ sequenceDiagram
   V-->>W: new slot state (blocking read)
   W-->>B: slot 2 running, session-start
   loop each message, until an ending
-    R->>O: chat completion, streamed
-    O-->>R: tokens
-    R->>V: XADD message-start, text…, message-end
-    V-->>W: entries
-    W-->>B: SSE events
+    R->>O: chat completion
+    O-->>R: whole message
     R->>R: wait out the pacing (§7)
+    R->>V: XADD message
+    V-->>W: entry
+    W-->>B: SSE event
   end
   R->>V: XADD session-end, expire stream in 1 min
   R->>V: slot:2 = intermission, then idle or running
@@ -218,9 +215,8 @@ sequenceDiagram
 
 **Each turn:**
 
-1. The runner writes `message-start` and stores that entry's ID as `messageEntryId` in the Valkey hash `slot:{n}`, for viewers who join mid-message (§5.1).
-2. It sends the role's model its instructions and the full history (S5.4). Each model sees its own earlier messages as its own, and the other model's messages as coming from the other party.
-3. The model streams its answer back in small pieces, *deltas*. Each is usually one token, but some providers send several at a time, so the runner can't count tokens exactly. It writes a `text` event for every 5 deltas, then `message-end` when the answer is complete.
+1. As soon as the previous message is written, the runner sends the next role's model its instructions and the full history (S5.4). Each model sees its own earlier messages as its own, and the other model's messages as coming from the other party. The call is an ordinary request, not streamed: the answer arrives whole (D31).
+2. While the model generates, browsers are still revealing the previous message. When the answer arrives, the runner waits out the pacing (§7), then writes it as one `message` event.
 
 **Endings:**
 
@@ -230,17 +226,17 @@ sequenceDiagram
 
 ### 6.3 The Secret in the browser
 
-The shimmer starts at the Secret's first character (S4.15), so the browser must know the Secret before it types it. The runner keeps the Explorer's message so far, holding back the newest text until it has checked it. As soon as the message so far contains the Secret, the runner writes a `secret` event and then the held-back text.
+The shimmer starts at the Secret's first character (S4.15), so the browser must know the Secret before it types it. The runner checks each whole Explorer message before writing it. When the message contains the Secret, the `message` event carries it in its `secret` field, and `session-end` with the ending `found` follows.
 
-The browser buffers whole words before typing them, and the Secret contains no spaces. So by the time the browser types the Secret, it already has the `secret` event and can match the word. In step with the typing, it lights up the same characters wherever the Secret appeared earlier in the Pretender's output.
+The browser therefore knows the Secret before typing the first character of that message. As it types the Secret, it lights up the same characters wherever the Secret appeared earlier in the Pretender's output, in step.
 
 ## 7. Pacing
 
-Text appears **character by character**, at a steady rate: 30 characters per second for the Explorer, 120 for the Pretender (S4.10). How big the `text` events are doesn't affect the display.
+Text appears **character by character**, at a steady rate: 30 characters per second for the Explorer, 120 for the Pretender (S4.10), even though each message arrives whole.
 
 **On the runner's side:**
-- Model output is forwarded as soon as it arrives.
-- Before starting the next turn, the runner waits until 1.1 × (the message's characters ÷ the role's rate) has passed since the message started.
+- The runner writes a message only once 1.1 × (the previous message's characters ÷ its role's rate) has passed since it wrote the previous one.
+- It generates the next message meanwhile, so generation is hidden whenever it takes less time than revealing the previous message. After a short message, such as a one-word command, it doesn't, and the wait shows as a pause before the next message. The multiplier, or a minimum pause, is to be tuned in trial runs so these waits feel even.
 
 The runner is therefore about 10% slower than the display, and no backlog builds up in the browser.
 
