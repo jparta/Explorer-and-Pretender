@@ -13,7 +13,7 @@ Three components run in the local cluster (D3):
 ```mermaid
 flowchart LR
   browser["Browser<br/>(React page)"]
-  subgraph cluster["Local cluster (kind)"]
+  subgraph cluster["Local cluster (k3d)"]
     web["web<br/>Bun + Hono"]
     valkey[("valkey")]
     runner["runner<br/>Bun"]
@@ -45,9 +45,9 @@ packages/
   shared/         event types, Valkey key names, settings, helpers
 deploy/
   base/           Kustomize base: one folder per component
-  overlays/local/ the kind cluster
+  overlays/local/ the local cluster
 Tiltfile
-kind.yaml
+cluster.yaml    the local cluster and its image registry (ctlptl)
 ```
 
 The front end lives inside `apps/web`, because the web server serves it (D20) and Bun's dev server works by the server importing the page (D16). `packages/shared` holds whatever both sides of a contract must agree on, and the server, runner and front end all import it.
@@ -305,13 +305,17 @@ deploy/
 
 - **web:** a Deployment with two replicas (D25), reached through a ClusterIP Service and Tilt's port forward.
 - **runner:** a Deployment with one replica and the Recreate strategy (D24). It needs no Service, because nothing connects to it.
-- **valkey:** a StatefulSet with one replica (D28), keeping an append-only file on its volume (D23), reached through a headless Service named `valkey`. kind provides volumes out of the box through its default storage class.
+- **valkey:** a StatefulSet with one replica (D28), keeping an append-only file on its volume (D23), reached through a headless Service named `valkey`. k3s provides volumes out of the box through its built-in `local-path` storage class, locally and in Phase 3.
 - **Health checks (D29):** web has readiness on `/readyz` (Valkey answers) and liveness on `/livez` (the process only); valkey uses `valkey-cli ping` for both; the runner has liveness on its own `/livez`, which fails when a slot loop stops ticking.
 - **Memory:** request equal to limit, 128 MiB for web and runner, 64 MiB for Valkey (D26).
 - **CPU:** a request of 50m per container and no limit (D30).
-- **Configuration:** the settings of spec §7 come in as environment variables from a ConfigMap. The Tiltfile creates the API key's Secret from `.env` (D27).
+- **Configuration:** the settings of spec §7 come in as environment variables from a ConfigMap. The Tiltfile creates the API key's Secret from `.env` (D27); the runner gets it as a mounted file, read once at startup (D37).
 
 **Development:** in the cluster, the web container runs Bun's dev server with hot reloading. Tilt syncs changed files into the running containers instead of rebuilding images.
+
+**Local cluster:** `cluster.yaml` defines one k3s node (D34), run inside Docker by k3d on the same k3s release as production (D36), and a local image registry (D32), all created with ctlptl. Everything runs in the `exhibition` namespace (D35).
+
+**Checking manifests (later, in CI):** build each overlay with `kustomize build` and validate the output against Kubernetes' schemas with [kubeconform](https://github.com/yannh/kubeconform).
 
 ## 12. Prompts
 

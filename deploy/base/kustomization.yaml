@@ -1,0 +1,7 @@
+# The manifests shared by every environment (D10). Components are added here
+# one by one.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: exhibition
+resources:
+  - namespace.yaml

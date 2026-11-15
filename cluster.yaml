@@ -1,0 +1,25 @@
+# The local development cluster and its image registry, created with
+#   ctlptl apply -f cluster.yaml
+# and removed with
+#   ctlptl delete -f cluster.yaml
+#
+# One k3s node (D34), run inside Docker by k3d, on the same k3s release as
+# production (D36), with a local registry that Tilt pushes images to (D32).
+
+apiVersion: ctlptl.dev/v1alpha1
+kind: Registry
+name: ctlptl-registry
+port: 5005
+---
+apiVersion: ctlptl.dev/v1alpha1
+kind: Cluster
+product: k3d
+# ctlptl requires the k3d- prefix; k3d itself calls the cluster "exhibition".
+name: k3d-exhibition
+registry: ctlptl-registry
+k3d:
+  v1alpha5Simple:
+    servers: 1
+    agents: 0
+    # k3s's stable channel; update together with the Phase 3 VM.
+    image: rancher/k3s:v1.37.2-k3s1

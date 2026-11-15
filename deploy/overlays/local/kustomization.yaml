@@ -1,0 +1,5 @@
+# The local kind cluster: the base, plus patches for development as they're needed.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
