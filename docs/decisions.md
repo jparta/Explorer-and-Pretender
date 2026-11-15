@@ -292,3 +292,39 @@ Decisions are made by the project author. AI assistants helped research options 
 **Why:** A message is either in the stream in full or not at all, since one write can't be half done. That keeps resuming after a crash (Phase 2, D22) simple: with fragments, a message cut off midway could only be left unfinished or withdrawn and regenerated, because continuing a partial answer (prefill) is supported by fewer and fewer models. Whole messages also need no streaming from the provider, make the events simpler, let the runner check a message for the Secret before anyone sees it, and give a viewer who joins mid-message the whole message at once. Cost: before each message, the model's full generation time instead of its time to the first word. Mostly that is hidden behind revealing the previous message, but after a short message it shows as a pause; how the pacing evens this out is to be tuned in trial runs.
 
 **Sources:** [OpenRouter API reference (assistant prefill)](https://openrouter.ai/docs/api-reference/overview.md), [Anthropic migration guide (prefill not supported on newer models)](https://platform.claude.com/docs/en/about-claude/models/migration-guide.md) (checked November 2026).
+
+## D32 — A local image registry, set up with ctlptl
+
+**Decision:** The local kind cluster is created with ctlptl together with a local image registry. Tilt pushes built images to the registry, and the cluster pulls them from there.
+
+**Alternatives:** Plain kind, with Tilt copying each built image into the cluster (`kind load`).
+
+**Why:** Pushing to a registry moves only the image layers that changed, so rebuilds reach the cluster faster; Tilt's own docs recommend it for kind. It also matches production, where the cluster pulls its images from a registry. Cost: ctlptl, a small tool from the Tilt team, is one more prerequisite.
+
+**Sources:** [Tilt: choosing a local dev cluster](https://docs.tilt.dev/choosing_clusters.html), [ctlptl](https://github.com/tilt-dev/ctlptl) (checked November 2026).
+
+## D33 — The local cluster runs the same Kubernetes minor version as k3s
+
+**Decision:** The kind node image is pinned to the Kubernetes minor version of k3s's stable channel, currently 1.36, and updated together with it.
+
+**Alternatives:** Leave the version to kind's default, which changes with each kind release, so two developers with different kind versions get different clusters.
+
+**Why:** Development and production stay alike: a manifest that works locally works on the k3s cluster of Phase 3. Pinning also means everyone who clones the repo gets the same cluster. The patch versions may differ slightly, since kind and k3s publish builds separately.
+
+**Sources:** [kind releases](https://github.com/kubernetes-sigs/kind/releases), [k3s v1.37.X release notes (stable channel at v1.36.3)](https://docs.k3s.io/release-notes/v1.37.X) (checked November 2026).
+
+## D34 — One node locally
+
+**Decision:** The local cluster has a single node.
+
+**Alternatives:** A control-plane node plus worker nodes, to show pods being spread across machines.
+
+**Why:** Phase 3 runs on a single VM, so one node matches production, and it is the simplest and lightest setup. Showing multi-node scheduling is not a goal of the project.
+
+## D35 — A dedicated namespace
+
+**Decision:** All of the exhibition's objects live in their own namespace, `exhibition`.
+
+**Alternatives:** The `default` namespace.
+
+**Why:** Control: everything the exhibition runs is listed and can be removed together, apart from anything else in the cluster. Phase 2's permissions for the session controller will also be granted per namespace.
