@@ -352,3 +352,11 @@ Decisions are made by the project author. AI assistants helped research options 
 **Why:** Environment variables leak easily: code that logs or reports the whole environment includes them, and child processes inherit them. A file is read only by code that asks for it by path, and can be made readable by its owner only. Cost: a volume and a mount in the manifest, and a couple of lines to read the file. Neither way picks up a changed key without a restart, since the runner reads the file only at startup.
 
 **Sources:** [OWASP Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html), which notes that environment variables "may be included in logs or system dumps" (checked November 2026).
+
+## D38 — k3s's built-in Traefik stays on in Phase 1
+
+**Decision:** The local cluster keeps k3s's default add-ons, including Traefik, although nothing routes through it until Phase 2 (D5).
+
+**Alternatives:** Turn Traefik off with a k3s option in `cluster.yaml` until Phase 2.
+
+**Why:** The local cluster stays a default k3s install, like production (D36), and Phase 2 needs no change to `cluster.yaml`. The cost is small: Traefik used about 24 MiB of memory in the fresh cluster.
