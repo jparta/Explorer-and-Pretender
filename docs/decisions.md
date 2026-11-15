@@ -56,6 +56,8 @@ Decisions are made by the project author. AI assistants helped research options 
 
 ## D7 — kind for the local cluster
 
+*Superseded by D36.*
+
 **Decision:** Run the local development cluster with kind.
 
 **Alternatives:** Docker Desktop's built-in cluster, minikube.
@@ -305,6 +307,8 @@ Decisions are made by the project author. AI assistants helped research options 
 
 ## D33 — The local cluster runs the same Kubernetes minor version as k3s
 
+*Superseded by D36.*
+
 **Decision:** The kind node image is pinned to the Kubernetes minor version of k3s's stable channel, currently 1.36, and updated together with it.
 
 **Alternatives:** Leave the version to kind's default, which changes with each kind release, so two developers with different kind versions get different clusters.
@@ -328,3 +332,23 @@ Decisions are made by the project author. AI assistants helped research options 
 **Alternatives:** The `default` namespace.
 
 **Why:** Control: everything the exhibition runs is listed and can be removed together, apart from anything else in the cluster. Phase 2's permissions for the session controller will also be granted per namespace.
+
+## D36 — k3d for the local cluster, running the same k3s release as production
+
+**Decision:** The local cluster runs k3s inside Docker with k3d, created by ctlptl together with the local registry (D32). The k3s image is pinned to the release on k3s's stable channel, currently `v1.37.2+k3s1`, and updated together with it. This replaces D7 (kind) and D33 (kind's node image matched to k3s's minor version).
+
+**Alternatives:** Keep kind with its node image pinned to k3s's minor version (D7, D33).
+
+**Why:** Development runs the same software as production (k3s, D6), not only the same Kubernetes version. k3s's built-in parts, such as its load balancer, its storage class and Traefik, behave the same locally as on the Phase 3 VM. Cost: k3d is a community project with sparse releases (v5.8.3 in February 2025, then v5.9.0 in June 2026), while kind is run by Kubernetes' own testing group.
+
+**Sources:** [k3d releases](https://github.com/k3d-io/k3d/releases), [k3s release channels](https://update.k3s.io/v1-release/channels), [ctlptl's k3d support](https://github.com/tilt-dev/ctlptl/blob/main/pkg/cluster/admin_k3d.go) (checked November 2026).
+
+## D37 — The API key reaches the runner as a mounted file
+
+**Decision:** The runner gets the API key from the `llm-api` Secret mounted as a file, read once at startup, not as an environment variable.
+
+**Alternatives:** An environment variable filled from the Secret (`secretKeyRef`).
+
+**Why:** Environment variables leak easily: code that logs or reports the whole environment includes them, and child processes inherit them. A file is read only by code that asks for it by path, and can be made readable by its owner only. Cost: a volume and a mount in the manifest, and a couple of lines to read the file. Neither way picks up a changed key without a restart, since the runner reads the file only at startup.
+
+**Sources:** [OWASP Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html), which notes that environment variables "may be included in logs or system dumps" (checked November 2026).
