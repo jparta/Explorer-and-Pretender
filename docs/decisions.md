@@ -448,3 +448,11 @@ Decisions are made by the project author. AI assistants helped research options 
 **Why:** Observability grows step by step with the phases, so the project ends up close to how production systems are run without delaying Phase 1. stdout is where Kubernetes collects container logs: `kubectl logs` and Tilt show them, and any log collector added later reads them from there. JSON lines can be searched and filtered by field.
 
 **Sources:** [Kubernetes: logging architecture](https://kubernetes.io/docs/concepts/cluster-administration/logging/) (checked November 2026).
+
+## D48 — The API key's Secret keeps a fixed name
+
+**Decision:** The API key's Secret stays as D27 makes it, with the fixed name `llm-api`; it is not generated with Kustomize's `secretGenerator`. After changing the key in `.env`, the runner is restarted by hand, as the README says.
+
+**Alternatives:** `secretGenerator`, which adds a hash of the contents to the Secret's name, so a changed key restarts the runner by itself, consistent with D45 for ConfigMaps.
+
+**Why:** It keeps things simple, and the key changes rarely. `secretGenerator` would need `.env` moved into the local overlay's folder or Kustomize's file-loading restriction turned off (D27), and each key change would leave the previous Secret, with the old key in it, in the cluster until cleaned up.
