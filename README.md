@@ -11,6 +11,8 @@ This is a learning project by Joonatan Partanen.
 - [Decisions](docs/decisions.md)
 - [Phase 1 spec](docs/phase-1/spec.md) and [architecture](docs/phase-1/architecture.md)
 
+The documents, and comments in the code and manifests, refer to decisions by number, such as D36, and to spec requirements the same way, such as S2.4.
+
 ## Running it locally
 
 The exhibition runs on a local Kubernetes cluster (k3s, run inside Docker by k3d), with Tilt building and deploying it.

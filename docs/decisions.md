@@ -2,6 +2,8 @@
 
 Project-wide decision log. Newest last. Each entry records what was decided, what else was considered, and why.
 
+Entries are numbered D1, D2, … in the order they were made, and other documents refer to them by that number. A number is never reused, and entries aren't deleted. An entry that a later decision replaces entirely says *Superseded by D…* under its heading. An entry that a later decision changes only in part gets a short note there instead, saying what changed and where. Likewise, S-numbers such as S2.4 refer to requirements in a phase's spec.
+
 Decisions are made by the project author. AI assistants helped research options and draft entries; each entry records the author's choice.
 
 ## D1 — Kubernetes from the start, no Docker Compose
@@ -23,6 +25,8 @@ Decisions are made by the project author. AI assistants helped research options 
 **Watch out:** Tilt only rewrites image references in manifests it deploys. Jobs created at runtime (Phase 2) need the image reference passed another way, e.g. through an environment variable.
 
 ## D3 — Runner, web and Redis as separate components
+
+*The store is now Valkey instead of Redis (D18), and Sessions travel through Streams instead of pub/sub (D19); the split into three components stays as decided here.*
 
 **Decision:** Split the system from the start into a runner (runs Sessions), a web tier (serves viewers) and Redis pub/sub between them.
 
@@ -296,6 +300,8 @@ Decisions are made by the project author. AI assistants helped research options 
 **Sources:** [OpenRouter API reference (assistant prefill)](https://openrouter.ai/docs/api-reference/overview.md), [Anthropic migration guide (prefill not supported on newer models)](https://platform.claude.com/docs/en/about-claude/models/migration-guide.md) (checked November 2026).
 
 ## D32 — A local image registry, set up with ctlptl
+
+*The cluster is now k3d instead of kind (D36); the registry stays as decided here.*
 
 **Decision:** The local kind cluster is created with ctlptl together with a local image registry. Tilt pushes built images to the registry, and the cluster pulls them from there.
 
