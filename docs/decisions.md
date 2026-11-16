@@ -363,7 +363,7 @@ Decisions are made by the project author. AI assistants helped research options 
 
 ## D39 — Images are pinned by version tag only, for now
 
-**Decision:** Every image is referenced by an exact version tag, such as `valkey/valkey:9.1.3-alpine` or `rancher/k3s:v1.37.2-k3s1`, without a digest (`@sha256:…`). Later, digests are added and kept up to date by a bot that opens pull requests (roadmap, Phase 3).
+**Decision:** Every image is referenced by an exact version tag, such as `valkey/valkey:9.1.3-alpine` or `rancher/k3s:v1.37.2-k3s1`, without a digest (`@sha256:…`). Later, digests are added and kept up to date by a bot that opens pull requests (roadmap, Phase 4).
 
 **Alternatives:** A tag plus a digest, updated by a bot such as Renovate or Dependabot; a tag with `imagePullPolicy: Always`, so every pod start checks the registry.
 
