@@ -360,3 +360,39 @@ Decisions are made by the project author. AI assistants helped research options 
 **Alternatives:** Turn Traefik off with a k3s option in `cluster.yaml` until Phase 2.
 
 **Why:** The local cluster stays a default k3s install, like production (D36), and Phase 2 needs no change to `cluster.yaml`. The cost is small: Traefik used about 24 MiB of memory in the fresh cluster.
+
+## D39 — Images are pinned by version tag, not by digest
+
+**Decision:** Every image is referenced by an exact version tag, such as `valkey/valkey:9.1.3-alpine` or `rancher/k3s:v1.37.2-k3s1`, without a digest (`@sha256:…`).
+
+**Alternatives:** A tag plus a digest, which fixes the exact image bytes.
+
+**Why:** Maintainers re-push the same tag when they rebuild an image for security fixes in its base system. Without a digest, we pick those rebuilds up. With one, we'd have to update the digest by hand. The cost: a tag can point at different bytes over time, so two machines may run slightly different builds of the same version. A node also keeps the copy it already has, so a rebuild only arrives when the image is pulled again, for example on a new node or after the cluster is recreated.
+
+## D40 — Valkey refuses writes before reaching its memory limit
+
+**Decision:** Valkey runs with `maxmemory 48mb` and `maxmemory-policy noeviction`, below the container's 64 MiB limit (D26).
+
+**Alternatives:** No `maxmemory`, so the kernel kills Valkey at the container limit; `maxmemory` with an eviction policy, which deletes keys to make room.
+
+**Why:** If data ever grows that far, which needs a bug since the expected data is about 1 MB, Valkey stays up and answers writes with an error that shows in the runner's and web server's logs. That's easy to notice and diagnose. Being killed would instead restart Valkey into the same full state, and evicting could delete keys the app relies on, such as the day's spend count (D11). The 16 MiB between the two limits leaves room for what `maxmemory` doesn't count, such as connection buffers and the copy of the process that rewrites the append-only file.
+
+**Sources:** [Valkey: key eviction](https://valkey.io/topics/lru-cache/) (checked November 2026).
+
+## D41 — Valkey's volume is 256 MiB
+
+**Decision:** Valkey's volume claim asks for 256 MiB.
+
+**Alternatives:** 1 GiB.
+
+**Why:** It fits what Valkey writes: the append-only file grows to about 64 MB before its first rewrite, plus room for the rewrite's new file. It keeps the footprint small. k3s's `local-path` storage doesn't enforce the size, so it records what we expect rather than limiting anything.
+
+## D42 — A NetworkPolicy lets only web and runner reach Valkey
+
+**Decision:** A NetworkPolicy allows connections to Valkey's pod only from the web and runner pods, on port 6379. All other incoming traffic to Valkey is refused.
+
+**Alternatives:** No restriction, so any pod in the cluster can connect.
+
+**Why:** Valkey holds the Session streams, Secrets included, and the spend count. The NetworkPolicy keeps other pods in the cluster, such as Traefik from Phase 2, away from it. It's also one of the things this project means to show: control over the network between components. k3s enforces NetworkPolicies with its built-in controller, both locally and in Phase 3.
+
+**Sources:** [Kubernetes: NetworkPolicies](https://kubernetes.io/docs/concepts/services-networking/network-policies/), [k3s: network options](https://docs.k3s.io/networking/basic-network-options) (checked November 2026).
