@@ -5,7 +5,7 @@
 - [ ] Explorer and Pretender hold a Session; it ends when the Explorer sounds out the Secret, or at a turn limit
 - [ ] 3 slots in a looping horizontal carousel; a Session starts when someone watches its slot
 - [ ] Sessions are viewable live in the browser
-- [ ] Runner, web and Redis run as separate Deployments on a local cluster
+- [ ] Runner and web run as Deployments, and Valkey as a StatefulSet, on a local cluster
 - [ ] `tilt up` builds and starts everything, with live updates while developing
 
 ## Phase 2 — Sessions as Kubernetes Jobs
@@ -23,6 +23,12 @@
 - [ ] Public website with a domain and TLS
 - [ ] Rebuildable from scratch with documented commands
 - [ ] More kinds of Pretender alongside the terminal, each quite different from the others: one is an open world (a single one), others still to be found. Each Session gets a kind at random, independently per slot, so all three slots may show the same kind
+
+## Phase 4 — Operations
+
+- [ ] Deployed with GitOps (Flux or Argo CD): the cluster follows the repository by itself, and removes what is no longer in it, such as old hash-named ConfigMaps and the old values they held
+- [ ] Images pinned by digest, kept up to date by a bot that opens pull requests (D39)
+- [ ] Metrics and dashboards, sized against the VM's memory (D47)
 
 ## Ideas, not promises
 
