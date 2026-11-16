@@ -1,5 +1,7 @@
-# The local kind cluster: the base, plus patches for development as they're needed.
+# The local k3d cluster: the base, plus what only development needs.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+namespace: exhibition
 resources:
   - ../../base
+  - valkey-passwords.yaml

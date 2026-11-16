@@ -1,0 +1,9 @@
+# Valkey users and what each may do (D46). Comment lines are removed at start-up,
+# and each {{name}} is replaced with that user's password from the valkey-passwords Secret (D50).
+# ~pattern: read and write matching keys. %R~pattern: read only. +command: allowed command.
+# The command lists are settled when the runner and web server are written.
+user default off
+user runner on >{{runner}} ~session:* ~slots ~slot:* ~spend:* ~sleeping:* %R~presence %R~watching:* +xadd +expire +hset +get +set +incrbyfloat +exists +ping
+user web on >{{web}} %R~session:* %R~slots %R~slot:* ~presence ~watching:* +xread +xrange +xrevrange +hgetall +set +ping
+user probe on nopass +ping
+user admin on >{{admin}} ~* &* +@all

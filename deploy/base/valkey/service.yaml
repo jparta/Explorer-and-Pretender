@@ -1,0 +1,15 @@
+# A headless Service (no virtual IP): the name "valkey" resolves straight to the pod (D28).
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey
+  labels:
+    app: valkey
+spec:
+  clusterIP: None
+  selector:
+    app: valkey
+  ports:
+    - name: valkey
+      port: 6379
+      targetPort: valkey

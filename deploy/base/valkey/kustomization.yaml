@@ -1,0 +1,13 @@
+# Valkey: the store shared by the runner and the web server (docs/phase-1/components/valkey.md).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - statefulset.yaml
+  - service.yaml
+  - networkpolicy.yaml
+# A hash of the files' contents is added to the name, so editing them restarts Valkey (D45).
+configMapGenerator:
+  - name: valkey-config
+    files:
+      - valkey.conf
+      - users.acl

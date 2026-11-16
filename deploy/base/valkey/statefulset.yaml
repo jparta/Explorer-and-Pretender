@@ -1,0 +1,80 @@
+# One Valkey pod, valkey-0, with its own volume (D28).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: valkey
+  labels:
+    app: valkey
+spec:
+  serviceName: valkey
+  replicas: 1
+  selector:
+    matchLabels:
+      app: valkey
+  template:
+    metadata:
+      labels:
+        app: valkey
+    spec:
+      containers:
+        - name: valkey
+          image: valkey/valkey:9.1.3-alpine  # D43, tag only (D39)
+          # Assemble the user list from the template and the passwords (D50), then hand
+          # over to the image's own start-up script, which switches to the valkey user.
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+              p=/etc/valkey-passwords
+              grep -v '^#' /etc/valkey/users.acl \
+                | sed -e "s/{{runner}}/$(cat $p/runner)/" \
+                      -e "s/{{web}}/$(cat $p/web)/" \
+                      -e "s/{{admin}}/$(cat $p/admin)/" \
+                > /tmp/users.acl
+              chown valkey /tmp/users.acl
+              chmod 600 /tmp/users.acl
+              exec docker-entrypoint.sh valkey-server /etc/valkey/valkey.conf
+          ports:
+            - name: valkey
+              containerPort: 6379
+          resources:
+            requests:
+              cpu: 50m         # D30: no CPU limit
+              memory: 64Mi     # D26: request equals limit
+            limits:
+              memory: 64Mi
+          # valkey-cli exits with 0 even on an error reply such as LOADING or NOAUTH,
+          # so only a real PONG counts (component doc, section 3).
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "valkey-cli --no-auth-warning --user probe --pass probe ping | grep -q PONG"]
+            periodSeconds: 2   # D44: ready again soon after a restart
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "valkey-cli --no-auth-warning --user probe --pass probe ping | grep -q PONG"]
+            # D44: Kubernetes' defaults (every 10 s, 1 s timeout, 3 failures)
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /etc/valkey
+              readOnly: true
+            - name: passwords
+              mountPath: /etc/valkey-passwords
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: valkey-config
+        - name: passwords
+          secret:
+            secretName: valkey-passwords
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 256Mi   # D41
