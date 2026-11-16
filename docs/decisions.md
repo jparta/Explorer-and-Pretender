@@ -428,3 +428,23 @@ Decisions are made by the project author. AI assistants helped research options 
 **Watch out:** The hash only reaches objects Kustomize builds. Anything created at runtime, such as Phase 2's Jobs, can't know the hashed name, and needs another way.
 
 **Sources:** [Kustomize: configMapGenerator](https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/configmapgenerator/) (checked November 2026).
+
+## D46 — Each component has its own Valkey user
+
+**Decision:** Valkey's anonymous default user is turned off. The runner and the web server each log in as their own Valkey user, allowed only the commands and keys that component needs. A third user, allowed only `PING`, serves the health checks. This adds to the NetworkPolicy (D42).
+
+**Alternatives:** The NetworkPolicy alone; one shared password for both components.
+
+**Why:** Each component that acts on Valkey has only its own permissions, so it can't do just anything. A taken-over web pod, for example, could read Session streams but not write fake Session events or change the spend count. A shared password wouldn't give that, since both components would hold it. The cost is keeping each user's permissions in step with what its component's code does; tests that run the components against a real Valkey with the same user list catch any mismatch.
+
+**Sources:** [Valkey ACLs](https://valkey.io/topics/acl/) (checked November 2026).
+
+## D47 — Structured logs to stdout in Phase 1, metrics later
+
+**Decision:** In Phase 1, every component writes its logs as JSON lines to stdout, one object per line with fields such as `time`, `level`, `component`, `slot`, `sessionId` and `msg`. Metrics and dashboards come in a later phase.
+
+**Alternatives:** Plain text logs; a metrics and dashboard stack already in Phase 1.
+
+**Why:** Observability grows step by step with the phases, so the project ends up close to how production systems are run without delaying Phase 1. stdout is where Kubernetes collects container logs: `kubectl logs` and Tilt show them, and any log collector added later reads them from there. JSON lines can be searched and filtered by field.
+
+**Sources:** [Kubernetes: logging architecture](https://kubernetes.io/docs/concepts/cluster-administration/logging/) (checked November 2026).
