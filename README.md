@@ -40,4 +40,10 @@ The exhibition runs on a local Kubernetes cluster (k3s, run inside Docker by k3d
 
    Tilt's dashboard opens in the browser and shows each component's status and logs.
 
+After changing the API key in `.env`, restart the runner: Tilt updates the key's Secret, but the runner reads the key only when it starts.
+
+```
+kubectl rollout restart deployment/runner -n exhibition
+```
+
 To remove the cluster and the registry again: `ctlptl delete -f cluster.yaml`.
