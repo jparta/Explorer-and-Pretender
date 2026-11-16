@@ -396,3 +396,35 @@ Decisions are made by the project author. AI assistants helped research options 
 **Why:** Valkey holds the Session streams, Secrets included, and the spend count. The NetworkPolicy keeps other pods in the cluster, such as Traefik from Phase 2, away from it. It's also one of the things this project means to show: control over the network between components. k3s enforces NetworkPolicies with its built-in controller, both locally and in Phase 3.
 
 **Sources:** [Kubernetes: NetworkPolicies](https://kubernetes.io/docs/concepts/services-networking/network-policies/), [k3s: network options](https://docs.k3s.io/networking/basic-network-options) (checked November 2026).
+
+## D43 — Valkey's image is the Alpine variant
+
+**Decision:** Valkey runs from `valkey/valkey:9.1.3-alpine`.
+
+**Alternatives:** The Debian-based `valkey/valkey:9.1.3`.
+
+**Why:** It is light (45 MB against Debian's 118 MB) and has the essential tools, such as `ps`, `top`, `vi` and `nc`. For anything more, `kubectl debug` can attach a temporary container with other tools to the running pod.
+
+**Sources:** [the official image's Dockerfiles](https://github.com/valkey-io/valkey-container/tree/mainline/9.1), [Kubernetes: debugging with ephemeral containers](https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/#ephemeral-container) (checked November 2026).
+
+## D44 — Valkey's probe timing
+
+**Decision:** Valkey's readiness probe runs every 2 seconds. Its liveness probe uses Kubernetes' defaults: every 10 seconds, a 1-second timeout, and a restart after 3 failures in a row.
+
+**Alternatives:** Kubernetes' defaults for both; Bitnami's Valkey chart values (every 5 seconds, 5 failures, a 20-second wait before the first probe).
+
+**Why:** After a restart, Valkey counts as ready again within about 2 seconds, so the web pods get back up fast. Liveness stays tolerant, so a short hiccup doesn't restart Valkey.
+
+**Sources:** [Kubernetes: probes](https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/), [Bitnami's Valkey chart defaults](https://github.com/bitnami/charts/blob/main/bitnami/valkey/values.yaml) (checked November 2026).
+
+## D45 — ConfigMaps come from Kustomize's configMapGenerator
+
+**Decision:** Every ConfigMap in our manifests is generated with Kustomize's `configMapGenerator`, from a plain file or from literal values in the `kustomization.yaml`. Valkey's settings are the first: a `valkey.conf` file next to its manifests.
+
+**Alternatives:** For Valkey, its settings as command-line arguments in the StatefulSet. In general, ConfigMaps written by hand.
+
+**Why:** Kustomize adds a hash of the contents to the generated ConfigMap's name. A change gives a new name, which changes the pod template of whatever uses it, so those pods restart with the new settings without anyone remembering to do it. Using it for every ConfigMap keeps them all consistent.
+
+**Watch out:** The hash only reaches objects Kustomize builds. Anything created at runtime, such as Phase 2's Jobs, can't know the hashed name, and needs another way.
+
+**Sources:** [Kustomize: configMapGenerator](https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/configmapgenerator/) (checked November 2026).
