@@ -474,3 +474,21 @@ Decisions are made by the project author. AI assistants helped research options 
 **Why:** The permissions are visible in git and identical in development and production. Nothing has to compute hashes. Development and production differ only in where the `valkey-passwords` Secret comes from (D49 locally, Phase 3's mechanism in production). The runner and web pods each mount only their own password from that Secret.
 
 **Sources:** [Valkey ACLs](https://valkey.io/topics/acl/) (checked November 2026).
+
+## D51 — The local Valkey passwords are a plain Secret manifest
+
+**Decision:** The local `valkey-passwords` Secret (D49) is a plain Secret manifest in `deploy/overlays/local/`, with a fixed name. After changing a password, Valkey, the runner and the web server are restarted by hand.
+
+**Alternatives:** Kustomize's `secretGenerator` from a committed file, which adds a hash of the contents to the name, so a change restarts them by themselves (as D45 does for ConfigMaps).
+
+**Why:** Consistent with the API key's Secret (D48), and simpler in this case: easier to read and less setup. The passwords will most likely never change.
+
+## D52 — Containers run as their images set them up, not hardened
+
+**Decision:** Containers run with their images' own user setup and Kubernetes' default security settings. Valkey's container, for example, starts as root and switches to the `valkey` user itself.
+
+**Alternatives:** Kubernetes' "restricted" Pod Security Standard: every container runs as a non-root user from the start and can never become root, gets no extra Linux privileges (capabilities), has a read-only file system apart from its mounts, and gets no Kubernetes API credentials unless it needs them.
+
+**Why:** Simplicity. The hardened settings exist and would leave much less to work with for anyone who takes over a container, at about ten lines per component; we acknowledge them and leave them out for now.
+
+**Sources:** [Kubernetes: Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/) (checked November 2026).
