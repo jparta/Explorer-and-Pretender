@@ -361,13 +361,13 @@ Decisions are made by the project author. AI assistants helped research options 
 
 **Why:** The local cluster stays a default k3s install, like production (D36), and Phase 2 needs no change to `cluster.yaml`. The cost is small: Traefik used about 24 MiB of memory in the fresh cluster.
 
-## D39 — Images are pinned by version tag, not by digest
+## D39 — Images are pinned by version tag only, for now
 
-**Decision:** Every image is referenced by an exact version tag, such as `valkey/valkey:9.1.3-alpine` or `rancher/k3s:v1.37.2-k3s1`, without a digest (`@sha256:…`).
+**Decision:** Every image is referenced by an exact version tag, such as `valkey/valkey:9.1.3-alpine` or `rancher/k3s:v1.37.2-k3s1`, without a digest (`@sha256:…`). Later, digests are added and kept up to date by a bot that opens pull requests (roadmap, Phase 3).
 
-**Alternatives:** A tag plus a digest, which fixes the exact image bytes.
+**Alternatives:** A tag plus a digest, updated by a bot such as Renovate or Dependabot; a tag with `imagePullPolicy: Always`, so every pod start checks the registry.
 
-**Why:** Maintainers re-push the same tag when they rebuild an image for security fixes in its base system. Without a digest, we pick those rebuilds up. With one, we'd have to update the digest by hand. The cost: a tag can point at different bytes over time, so two machines may run slightly different builds of the same version. A node also keeps the copy it already has, so a rebuild only arrives when the image is pulled again, for example on a new node or after the cluster is recreated.
+**Why:** It keeps the initial setup simple. Tags alone give neither exact images nor automatic updates: a tag can point at different bytes after a maintainer rebuilds it, and a node never pulls a tag it already has again, so rebuilds only arrive on a fresh node or cluster. Digests with a bot fix both, with every update arriving as a reviewable commit, but need the bot set up first. `Always` would make each pod start depend on reaching the registry.
 
 ## D40 — Valkey refuses writes before reaching its memory limit
 
