@@ -536,3 +536,13 @@ Decisions are made by the project author. AI assistants helped research options 
 **Why:** No real downside showed for this component, and it's consistent with Valkey (D43). Alpine uses musl instead of glibc as its C library, which matters for npm packages with prebuilt native binaries, for musl's older DNS resolver (no TCP fallback before musl 1.2.4, 2023) and for musl's slower memory allocator. None applies here: the runner is plain TypeScript without native add-ons, Bun publishes its own musl build, and it brings its own allocator. If something odd shows up anyway, switching to slim is one line.
 
 **Sources:** [oven/bun tags on Docker Hub](https://hub.docker.com/r/oven/bun/tags), [musl 1.2.4 release notes](https://musl.libc.org/releases.html) (checked November 2026).
+
+## D57 — A NetworkPolicy limits the runner's traffic
+
+**Decision:** The runner's pod accepts no incoming connections, and may connect out only to the cluster's DNS, to Valkey on port 6379, and to port 443 on addresses outside the private ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`).
+
+**Alternatives:** No NetworkPolicy for the runner in Phase 1, leaving D42's policy on Valkey as the only one.
+
+**Why:** It's a cheap way to limit traffic to what is actually required: one manifest, checked once in the cluster. Its limits: a standard NetworkPolicy matches addresses, not names, so the last rule allows HTTPS to any public address rather than only OpenRouter (naming a host needs a network plugin such as Cilium, which k3s doesn't include). A model server on the local network (S5.2) would need a rule of its own.
+
+**Sources:** [Kubernetes: NetworkPolicies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) (checked November 2026).
