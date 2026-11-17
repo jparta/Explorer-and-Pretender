@@ -23,6 +23,7 @@ The exhibition runs on a local Kubernetes cluster (k3s, run inside Docker by k3d
 - [k3d](https://k3d.io/#installation) v5.9.0 or later, which runs the cluster's k3s node in Docker
 - [ctlptl](https://github.com/tilt-dev/ctlptl#how-do-i-install-it), which creates the cluster and its image registry
 - [Tilt](https://docs.tilt.dev/install.html)
+- [Bun](https://bun.com/docs/installation) 1.4.4, for installing packages, running tests and type checking on your machine (D53, D54)
 - An [OpenRouter](https://openrouter.ai/) API key, created with a daily limit 10% above the exhibition's $2 daily cap
 
 ### Steps

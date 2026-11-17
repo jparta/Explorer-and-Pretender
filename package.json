@@ -1,0 +1,13 @@
+{
+  "name": "explorer-and-pretender",
+  "private": true,
+  "packageManager": "bun@1.4.4",
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.4",
+    "typescript": "7.0.2"
+  }
+}

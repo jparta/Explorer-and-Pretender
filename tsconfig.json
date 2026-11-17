@@ -1,0 +1,22 @@
+// Type checking for every TypeScript file in the repository, tests included:
+// bun run check (shared component doc, section 5). Bun runs TypeScript without
+// checking types, so this is the only type check. The front end will get its own
+// settings (browser types, JSX) when it's written.
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext"],
+    "types": ["bun"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "exclude": ["node_modules"]
+}
