@@ -505,7 +505,7 @@ Decisions are made by the project author. AI assistants helped research options 
 
 **Alternatives:** Bun only inside Docker containers, with every command run through `docker run`.
 
-**Why:** The editor's type checking needs the installed packages on the developer's own disk, which only a local install gives directly.
+**Why:** Although it needs installing, it is faster and simpler, with fewer moving parts: running Bun in Docker would put every command behind `docker run`, slow down file access through a folder shared into the container (on Windows especially, with the thousands of small files in `node_modules`), and make tests that start their own containers pass Docker into the container.
 
 **Sources:** [Installing Bun](https://bun.com/docs/installation) (checked November 2026).
 
@@ -518,3 +518,11 @@ Decisions are made by the project author. AI assistants helped research options 
 **Why:** Automatic updates can break things unexpectedly: Bun fixes only its newest release, and upgrades inside 1.x have occasionally changed behaviour (D15). With an exact pin, an update happens only on purpose, and the dependency bot planned for Phase 4 (D39) can propose updates as pull requests.
 
 **Sources:** [Bun releases](https://github.com/oven-sh/bun/releases) (checked November 2026).
+
+## D55 — Events sent to the browser are `SseEvent`s, and keep the slot of `session-start`
+
+**Decision:** The type of what the browser receives over SSE (architecture §4.3) is named `SseEvent`. It tags each Session event with its slot, so a `session-start` carries the same slot twice: its own and the tag.
+
+**Alternatives:** Removing `slot` from `session-start`, since `slot:{n}` already says which Session runs in which slot. For the name: `PageEvent` (the earlier name), `BrowserEvent`, `ViewerEvent`.
+
+**Why:** Keeping the slot in `session-start` means the stream itself says where its Session ran, without looking up the slot–Session correspondence in Valkey. The name says where the type is used: on the SSE channel.
