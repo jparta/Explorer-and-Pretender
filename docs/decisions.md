@@ -498,3 +498,23 @@ Decisions are made by the project author. AI assistants helped research options 
 **Why:** Simplicity. The hardened settings exist and would leave much less to work with for anyone who takes over a container, at about ten lines per component; we acknowledge them and leave them out for now.
 
 **Sources:** [Kubernetes: Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/) (checked November 2026).
+
+## D53 — Bun is installed on the developer's machine
+
+**Decision:** Bun is a local prerequisite, listed in the README. Installing packages, running tests and type checking happen on the developer's machine; Tilt still builds the images for the cluster.
+
+**Alternatives:** Bun only inside Docker containers, with every command run through `docker run`.
+
+**Why:** The editor's type checking needs the installed packages on the developer's own disk, which only a local install gives directly.
+
+**Sources:** [Installing Bun](https://bun.com/docs/installation) (checked November 2026).
+
+## D54 — Bun is pinned to an exact version
+
+**Decision:** Bun is pinned to exactly `1.4.4`, the latest release (22 October 2026), in `package.json` and in the images' tags, and both are updated together.
+
+**Alternatives:** Allowing any `1.x` release.
+
+**Why:** Automatic updates can break things unexpectedly: Bun fixes only its newest release, and upgrades inside 1.x have occasionally changed behaviour (D15). With an exact pin, an update happens only on purpose, and the dependency bot planned for Phase 4 (D39) can propose updates as pull requests.
+
+**Sources:** [Bun releases](https://github.com/oven-sh/bun/releases) (checked November 2026).
