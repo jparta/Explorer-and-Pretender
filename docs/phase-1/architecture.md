@@ -66,6 +66,8 @@ The front end lives inside `apps/web`, because the web server serves it (D20) an
 
 Key names, expiry times and limits are constants in `packages/shared`.
 
+**Slot numbers** start from 0, everywhere: in keys such as `slot:{n}`, in events and in the SSE cursor (§5.1). A slot's number is then also its position in a list of slots. Viewers never see the numbers (S4.3).
+
 **Who may do what:** the runner and the web server each log in to Valkey as their own user, allowed only the keys and commands this table gives them (D46). The users are defined in the [Valkey component doc](components/valkey.md#6-users-and-permissions).
 
 **Why expiring keys for presence:** a web pod that dies can't undo what it wrote. A counter of viewers would stay wrong forever, while a key it stops refreshing expires by itself (D21).
@@ -118,7 +120,7 @@ type SlotStatus = {
 The browser receives both kinds over one SSE connection, each tagged with its slot:
 
 ```ts
-type PageEvent = { slot: number } & (SessionEvent | SlotStatus);
+type SseEvent = { slot: number } & (SessionEvent | SlotStatus);  // D55
 ```
 
 ## 5. HTTP endpoints
@@ -135,7 +137,7 @@ A hidden tab stops sending heartbeats but keeps `/events` open, so its Session k
 
 ### 5.1 The SSE stream
 
-Each SSE message carries one `PageEvent` as JSON in its `data:` field. Its `id:` field is the connection's **cursor**. For each slot, the cursor gives the Session the slot is showing and the last stream entry sent, for example `1:9f2c@1763045000000-0;2:a71b@1763045012345-3;3:-`. A slot with nothing running is `-`.
+Each SSE message carries one `SseEvent` as JSON in its `data:` field. Its `id:` field is the connection's **cursor**. For each slot, the cursor gives the Session the slot is showing and the last stream entry sent, for example `0:9f2c@1763045000000-0;1:a71b@1763045012345-3;2:-`. A slot with nothing running is `-`.
 
 When the connection drops, the browser reconnects by itself and sends the last cursor back as `Last-Event-ID`. One connection carries three Session streams, so the cursor has to name a position in each.
 
