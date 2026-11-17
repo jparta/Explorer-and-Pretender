@@ -526,3 +526,13 @@ Decisions are made by the project author. AI assistants helped research options 
 **Alternatives:** Removing `slot` from `session-start`, since `slot:{n}` already says which Session runs in which slot. For the name: `PageEvent` (the earlier name), `BrowserEvent`, `ViewerEvent`.
 
 **Why:** Keeping the slot in `session-start` means the stream itself says where its Session ran, without looking up the slot–Session correspondence in Valkey. The name says where the type is used: on the SSE channel.
+
+## D56 — The runner's image is the Alpine variant
+
+**Decision:** The runner runs from `oven/bun:1.4.4-alpine`.
+
+**Alternatives:** `oven/bun:1.4.4-slim` (Debian without extras, about 85 MB compressed against Alpine's 58 MB), `-distroless` (no shell).
+
+**Why:** No real downside showed for this component, and it's consistent with Valkey (D43). Alpine uses musl instead of glibc as its C library, which matters for npm packages with prebuilt native binaries, for musl's older DNS resolver (no TCP fallback before musl 1.2.4, 2023) and for musl's slower memory allocator. None applies here: the runner is plain TypeScript without native add-ons, Bun publishes its own musl build, and it brings its own allocator. If something odd shows up anyway, switching to slim is one line.
+
+**Sources:** [oven/bun tags on Docker Hub](https://hub.docker.com/r/oven/bun/tags), [musl 1.2.4 release notes](https://musl.libc.org/releases.html) (checked November 2026).
