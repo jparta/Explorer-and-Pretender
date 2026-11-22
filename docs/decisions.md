@@ -399,7 +399,6 @@ Decisions are made by the project author. AI assistants helped research options 
 
 *The Secret is now called the Codeword (D60); the rest stays as decided here.*
 
-
 **Decision:** A NetworkPolicy allows connections to Valkey's pod only from the web and runner pods, on port 6379. All other incoming traffic to Valkey is refused.
 
 **Alternatives:** No restriction, so any pod in the cluster can connect.
