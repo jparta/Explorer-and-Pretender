@@ -543,7 +543,7 @@ Decisions are made by the project author. AI assistants helped research options 
 
 The kubelet's probes still get in: Kubernetes lets traffic from a pod's own node through, whatever the policy says. That depends on the network plugin; tested on k3s.
 
-**Alternatives:** No NetworkPolicy for the runner in Phase 1, leaving D42's policy on Valkey as the only one. Later: a network plugin with name-based policies, such as Cilium, which could allow only `openrouter.ai`. Not for Phase 1, since it means replacing k3s's network plugin.
+**Alternatives:** No NetworkPolicy for the runner in Phase 1, leaving D42's policy on Valkey as the only one.
 
 **Why:** It's a cheap way to limit traffic to what is actually required: one manifest, checked once in the cluster. The reserved ranges are where harm could be done by a wrong `LLM_BASE_URL` or a compromised dependency: the Kubernetes API, other pods, the home network and a cloud metadata service. The public internet has to be open anyway, since a NetworkPolicy matches addresses, not names, and the provider's addresses change.
 
@@ -569,7 +569,8 @@ The kubelet's probes still get in: Kubernetes lets traffic from a pod's own node
 
 ## D60 — The game's phrase is the Codeword
 
-**Decision:** The phrase the Pretender hides and the Explorer looks for is called the **Codeword**, everywhere: code, docs, the glossary and the prompts' placeholder. "Secret" is kept only for its technical meanings, such as Kubernetes Secrets and the API key.
+**Decision:** The phrase the Pretender hides and the Explorer looks for is called the **Codeword**, everywhere: code, docs, the glossary and the prompts' placeholder. "secret" is kept only for its technical meanings, such as Kubernetes Secrets and the API key.
+
 
 **Alternatives:** Keeping "Secret".
 
