@@ -588,3 +588,15 @@ The kubelet's probes still get in: Kubernetes lets traffic from a pod's own node
 **Why:** It's a fully featured and fast option: one tool formats and lints, with 816 rules, written in Rust. Its weak point: its type-aware rules, such as catching an unhandled promise, use Biome's own type inference rather than TypeScript, and at Biome 2's launch caught about 75% of what typescript-eslint does; oxlint's cover more. ESLint's typescript-eslint supports TypeScript only below 6.1, and the project is on 7.0.
 
 **Sources:** [Biome 2 announcement](https://biomejs.dev/blog/biome-v2/), [Biome linter](https://biomejs.dev/linter/), [oxc type-aware linting](https://oxc.rs/docs/guide/usage/linter/type-aware.html), [typescript-eslint supported versions](https://typescript-eslint.io/users/dependency-versions/) (checked November 2026).
+
+## D62 — Claude Haiku 5.5 plays both roles, to start with
+
+**Decision:** The Explorer and the Pretender both run on Claude Haiku 5.5 (`anthropic/claude-haiku-5.5` on OpenRouter). Its reasoning effort is chosen after trying each level in real Sessions and measuring the actual cost.
+
+**Alternatives:** DeepSeek V4.1 Flash, GPT-6 Luna and Qwen 3.8 Flash in the same price range; Claude Sonnet 5.5 and Gemini 3.8 Flash among the more capable and more expensive models.
+
+**Why:** It's fast, relatively smart and inexpensive: $0.10 per million input tokens and $0.50 per million output tokens on OpenRouter, an estimated $0.006 per Session, so about 320 Sessions on the $2 daily cap. On Artificial Analysis, it edges GPT-6 Luna on performance for cost and is significantly ahead on speed for cost.
+
+**Watch out:** Haiku 5.5 thinks by default (adaptive thinking, default effort medium), and through OpenRouter its reasoning counts against the same token limit as the visible message, at about half of it at medium effort. With the message cap at 1,000 tokens, reasoning can use it up and leave an empty answer, which the runner retries as a failure and still pays for. The effort trials should watch for this.
+
+**Sources:** [OpenRouter models](https://openrouter.ai/api/v1/models), [OpenRouter: reasoning tokens](https://openrouter.ai/docs/use-cases/reasoning-tokens), [Artificial Analysis](https://artificialanalysis.ai/) (checked November 2026).
