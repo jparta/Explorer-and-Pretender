@@ -291,6 +291,8 @@ Decisions are made by the project author. AI assistants helped research options 
 
 ## D31 — The runner writes whole messages
 
+*The Secret is now called the Codeword (D60); the rest stays as decided here.*
+
 **Decision:** The runner waits until a model has finished its message, then writes the whole message to the Session's stream as one event. It asks the model for the next message as soon as the previous one is written, so generating overlaps with the browser revealing it.
 
 **Alternatives:** Fragments: forwarding the model's output in pieces of about five tokens while it is being generated. This was the earlier plan, agreed in October 2026 but not recorded as a decision. Its reason was that text starts appearing about a second after the model starts, with no wait for the whole message.
@@ -394,6 +396,9 @@ Decisions are made by the project author. AI assistants helped research options 
 **Why:** It fits what Valkey writes: the append-only file grows to about 64 MB before its first rewrite, plus room for the rewrite's new file. It keeps the footprint small. k3s's `local-path` storage doesn't enforce the size, so it records what we expect rather than limiting anything.
 
 ## D42 — A NetworkPolicy lets only web and runner reach Valkey
+
+*The Secret is now called the Codeword (D60); the rest stays as decided here.*
+
 
 **Decision:** A NetworkPolicy allows connections to Valkey's pod only from the web and runner pods, on port 6379. All other incoming traffic to Valkey is refused.
 
@@ -571,7 +576,16 @@ The kubelet's probes still get in: Kubernetes lets traffic from a pod's own node
 
 **Decision:** The phrase the Pretender hides and the Explorer looks for is called the **Codeword**, everywhere: code, docs, the glossary and the prompts' placeholder. "secret" is kept only for its technical meanings, such as Kubernetes Secrets and the API key.
 
-
 **Alternatives:** Keeping "Secret".
 
 **Why:** "Secret" clashes with Kubernetes Secrets and `.env` secrets, which the runner's doc discusses alongside it.
+
+## D61 — Biome for linting and formatting
+
+**Decision:** The code is linted and formatted with Biome, as part of the checks.
+
+**Alternatives:** oxlint, a linter only, with formatting by `bun fmt` or Oxfmt; ESLint with typescript-eslint, with formatting by Prettier or `bun fmt`.
+
+**Why:** It's a fully featured and fast option: one tool formats and lints, with 816 rules, written in Rust. Its weak point: its type-aware rules, such as catching an unhandled promise, use Biome's own type inference rather than TypeScript, and at Biome 2's launch caught about 75% of what typescript-eslint does; oxlint's cover more. ESLint's typescript-eslint supports TypeScript only below 6.1, and the project is on 7.0.
+
+**Sources:** [Biome 2 announcement](https://biomejs.dev/blog/biome-v2/), [Biome linter](https://biomejs.dev/linter/), [oxc type-aware linting](https://oxc.rs/docs/guide/usage/linter/type-aware.html), [typescript-eslint supported versions](https://typescript-eslint.io/users/dependency-versions/) (checked November 2026).
