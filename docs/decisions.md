@@ -531,18 +531,46 @@ Decisions are made by the project author. AI assistants helped research options 
 
 **Decision:** The runner runs from `oven/bun:1.4.4-alpine`.
 
-**Alternatives:** `oven/bun:1.4.4-slim` (Debian without extras, about 85 MB compressed against Alpine's 58 MB), `-distroless` (no shell).
+**Alternatives:** `oven/bun:1.4.4-slim` (Debian without extras), `-distroless` (no shell).
 
-**Why:** No real downside showed for this component, and it's consistent with Valkey (D43). Alpine uses musl instead of glibc as its C library, which matters for npm packages with prebuilt native binaries, for musl's older DNS resolver (no TCP fallback before musl 1.2.4, 2023) and for musl's slower memory allocator. None applies here: the runner is plain TypeScript without native add-ons, Bun publishes its own musl build, and it brings its own allocator. If something odd shows up anyway, switching to slim is one line.
+**Why:** The smaller image, the main reason for Valkey's Alpine image too (D43): 58 MB compressed against slim's 85 MB, so less to download on every update. No real downside showed for this component. Alpine uses musl instead of glibc as its C library, which matters for npm packages with prebuilt native binaries, for musl's older DNS resolver (no TCP fallback before musl 1.2.4, 2023) and for musl's slower memory allocator. None applies here: the runner is plain TypeScript without native add-ons, Bun publishes its own musl build, and it brings its own allocator. If something odd shows up anyway, switching to slim is one line.
 
 **Sources:** [oven/bun tags on Docker Hub](https://hub.docker.com/r/oven/bun/tags), [musl 1.2.4 release notes](https://musl.libc.org/releases.html) (checked November 2026).
 
 ## D57 — A NetworkPolicy limits the runner's traffic
 
-**Decision:** The runner's pod accepts no incoming connections, and may connect out only to the cluster's DNS, to Valkey on port 6379, and to port 443 on addresses outside the private ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`).
+**Decision:** The runner's pod accepts no incoming connections from other pods, and may connect out only to the cluster's DNS, to Valkey on port 6379, and to port 443 on any address outside the reserved ranges: the private networks (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), link-local (`169.254.0.0/16`, where cloud metadata services live) and carrier-grade NAT (`100.64.0.0/10`). The cluster's pods (`10.42.0.0/16`) and Services (`10.43.0.0/16`) fall inside `10.0.0.0/8`.
 
-**Alternatives:** No NetworkPolicy for the runner in Phase 1, leaving D42's policy on Valkey as the only one.
+The kubelet's probes still get in: Kubernetes lets traffic from a pod's own node through, whatever the policy says. That depends on the network plugin; tested on k3s.
 
-**Why:** It's a cheap way to limit traffic to what is actually required: one manifest, checked once in the cluster. Its limits: a standard NetworkPolicy matches addresses, not names, so the last rule allows HTTPS to any public address rather than only OpenRouter (naming a host needs a network plugin such as Cilium, which k3s doesn't include). A model server on the local network (S5.2) would need a rule of its own.
+**Alternatives:** No NetworkPolicy for the runner in Phase 1, leaving D42's policy on Valkey as the only one. Later: a network plugin with name-based policies, such as Cilium, which could allow only `openrouter.ai`. Not for Phase 1, since it means replacing k3s's network plugin.
 
-**Sources:** [Kubernetes: NetworkPolicies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) (checked November 2026).
+**Why:** It's a cheap way to limit traffic to what is actually required: one manifest, checked once in the cluster. The reserved ranges are where harm could be done by a wrong `LLM_BASE_URL` or a compromised dependency: the Kubernetes API, other pods, the home network and a cloud metadata service. The public internet has to be open anyway, since a NetworkPolicy matches addresses, not names, and the provider's addresses change.
+
+**Watch out:** S5.2 allows a local provider, but a model server on the local network has a private address and would need a rule of its own.
+
+**Sources:** [Kubernetes: NetworkPolicies](https://kubernetes.io/docs/concepts/services-networking/network-policies/), [IANA special-purpose address registry](https://www.iana.org/assignments/iana-ipv4-special-registry/iana-ipv4-special-registry.xhtml) (checked November 2026).
+
+## D58 — The runner owns the slot count
+
+**Decision:** The number of slots is a runner setting only. At start-up the runner writes it to Valkey, in the key `slot-count`; the web server reads it there and passes it to the page. The page ignores slots it doesn't know and shows missing ones as offline.
+
+**Alternatives:** `SLOTS` as a shared setting, read by the runner and the web server separately (the earlier design); the web server showing whatever slots exist in Valkey.
+
+**Why:** With a shared setting, the two sides can disagree: a change restarts both, but not at the same moment, and open pages keep the old number until they're reloaded. One writer makes Valkey the only source, and a page that tolerates unknown and missing slots makes the brief overlap during restarts harmless. Showing whatever slots exist doesn't work, because `slot:{n}` hashes are permanent, so slots removed from the count would still show.
+
+## D59 — Running out of prepaid credit puts the machine to sleep
+
+**Decision:** When the provider refuses a call because the account's prepaid credit is spent (OpenRouter's `limit_source` `openrouter_credits`), the runner does what it does for the key's daily limit (S6.2): the Session ends as sleeping, and every slot sleeps until midnight UTC.
+
+**Alternatives:** Treating it as an ordinary failure, retried and then ended as interrupted.
+
+**Why:** Retrying can't succeed until someone tops up the credit, so it's the same situation as the key limit.
+
+## D60 — The game's phrase is the Codeword
+
+**Decision:** The phrase the Pretender hides and the Explorer looks for is called the **Codeword**, everywhere: code, docs, the glossary and the prompts' placeholder. "Secret" is kept only for its technical meanings, such as Kubernetes Secrets and the API key.
+
+**Alternatives:** Keeping "Secret".
+
+**Why:** "Secret" clashes with Kubernetes Secrets and `.env` secrets, which the runner's doc discusses alongside it.
