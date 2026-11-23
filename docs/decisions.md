@@ -600,3 +600,23 @@ The kubelet's probes still get in: Kubernetes lets traffic from a pod's own node
 **Watch out:** Haiku 5.5 thinks by default (adaptive thinking, default effort medium), and through OpenRouter its reasoning counts against the same token limit as the visible message, at about half of it at medium effort. With the message cap at 1,000 tokens, reasoning can use it up and leave an empty answer, which the runner retries as a failure and still pays for. The effort trials should watch for this.
 
 **Sources:** [OpenRouter models](https://openrouter.ai/api/v1/models), [OpenRouter: reasoning tokens](https://openrouter.ai/docs/use-cases/reasoning-tokens), [Artificial Analysis](https://artificialanalysis.ai/) (checked November 2026).
+
+## D63 — Codewords are adjective-noun-verb, from short themed lists per kind
+
+**Decision:** A Codeword is an adjective, a noun and a verb, such as `verbose-keepalive-hibernates`. Each kind of Pretender has its own three word lists, of about 10 words each, chosen by the author. For the terminal, the themes are: adjectives from operating systems, nouns from the network's link layer, verbs from hardware. The words are technical terms with a human, perhaps whimsical, second reading, neither niche nor everyday.
+
+**Alternatives:** The four-part form of S3.1, with an adverb; one long, general list per part, shared by every kind.
+
+**Why:** About 10 words per list keeps them interesting and the Codeword controlled; the number of possible Codewords isn't critical. Each kind has its own lists so that each has its own personality. Adverbs are hard to theme, so they're left out. Everyday words are avoided partly because they would show up in a Pretender's output on their own.
+
+**Watch out:** About 1,000 Codewords per kind, so repeats across Sessions are likely; the models don't remember earlier Sessions, so only a viewer watching many could notice.
+
+## D64 — The local cluster's API listens on 127.0.0.1:6550
+
+**Decision:** `cluster.yaml` sets k3d's `kubeAPI` to host `127.0.0.1`, host IP `127.0.0.1` and host port `6550`: the kubeconfig points at `https://127.0.0.1:6550`, and the API's port is published on the loopback interface only.
+
+**Alternatives:** k3d's defaults, which published the API on all interfaces (`0.0.0.0`) on a random port, with `host.docker.internal` in the kubeconfig; pointing the kubeconfig at `127.0.0.1` by hand; correcting the hosts file's `host.docker.internal` entry.
+
+**Why:** It makes networking work long-term. With the defaults, kubectl reached the cluster through `host.docker.internal`, which Docker Desktop writes into Windows' hosts file with the machine's network address at that moment; after the address changed (from `192.168.1.64` to `192.168.1.66`), kubectl couldn't reach the cluster, and restarting Docker Desktop didn't rewrite the entry. The loopback address never changes with the network. It also stops publishing the API on the home network, and a fixed port keeps the kubeconfig's address the same when the cluster is recreated. The API server's certificate already accepts `127.0.0.1` (tested). Cost: recreating the cluster, and nothing outside this machine can reach the API, which nothing needs.
+
+**Sources:** [k3d: config file](https://k3d.io/stable/usage/configfile/) (checked November 2026).
