@@ -525,6 +525,8 @@ Decisions are made by the project author. AI assistants helped research options 
 
 ## D55 — Events sent to the browser are `SseEvent`s, and keep the slot of `session-start`
 
+*Slot states now travel as one list of every slot (D65), which needs no slot tag; Session events keep their tag as decided here.*
+
 **Decision:** The type of what the browser receives over SSE (architecture §4.3) is named `SseEvent`. It tags each Session event with its slot, so a `session-start` carries the same slot twice: its own and the tag.
 
 **Alternatives:** Removing `slot` from `session-start`, since `slot:{n}` already says which Session runs in which slot. For the name: `PageEvent` (the earlier name), `BrowserEvent`, `ViewerEvent`.
@@ -556,6 +558,8 @@ The kubelet's probes still get in: Kubernetes lets traffic from a pod's own node
 **Sources:** [Kubernetes: NetworkPolicies](https://kubernetes.io/docs/concepts/services-networking/network-policies/), [IANA special-purpose address registry](https://www.iana.org/assignments/iana-ipv4-special-registry/iana-ipv4-special-registry.xhtml) (checked November 2026).
 
 ## D58 — The runner owns the slot count
+
+*Superseded by D65.*
 
 **Decision:** The number of slots is a runner setting only. At start-up the runner writes it to Valkey, in the key `slot-count`; the web server reads it there and passes it to the page. The page ignores slots it doesn't know and shows missing ones as offline.
 
@@ -603,13 +607,13 @@ The kubelet's probes still get in: Kubernetes lets traffic from a pod's own node
 
 ## D63 — Codewords are adjective-noun-verb, from short themed lists per kind
 
-**Decision:** A Codeword is an adjective, a noun and a verb, such as `verbose-keepalive-hibernates`. Each kind of Pretender has its own three word lists, of about 10 words each, chosen by the author. For the terminal, the themes are: adjectives from operating systems, nouns from the network's link layer, verbs from hardware. The words are technical terms with a human, perhaps whimsical, second reading, neither niche nor everyday.
+**Decision:** A Codeword is an adjective, a noun and a verb, such as `verbose-keepalive-hibernates`. Each kind of Pretender (what it pretends to be, such as the terminal; see the glossary) has its own three word lists, of about 10 words each, chosen by the author. For the terminal, the themes are: adjectives from operating systems, nouns from the network's link layer, verbs from hardware. The words are technical terms with a human, perhaps whimsical, second reading, neither niche nor everyday.
 
 **Alternatives:** The four-part form of S3.1, with an adverb; one long, general list per part, shared by every kind.
 
-**Why:** About 10 words per list keeps them interesting and the Codeword controlled; the number of possible Codewords isn't critical. Each kind has its own lists so that each has its own personality. Adverbs are hard to theme, so they're left out. Everyday words are avoided partly because they would show up in a Pretender's output on their own.
+**Why:** About 10 words per list keeps them interesting and the Codeword controlled; the number of possible Codewords isn't critical. Each kind of Pretender has its own lists so that each has its own personality. Adverbs are hard to theme, so they're left out. Everyday words are avoided partly because they would show up in a Pretender's output on their own.
 
-**Watch out:** About 1,000 Codewords per kind, so repeats across Sessions are likely; the models don't remember earlier Sessions, so only a viewer watching many could notice.
+**Watch out:** About 1,000 Codewords per kind, so a Codeword will repeat now and then across Sessions. That's fine, since the number of possible Codewords isn't critical, and the models don't remember earlier Sessions.
 
 ## D64 — The local cluster's API listens on 127.0.0.1:6550
 
@@ -617,6 +621,16 @@ The kubelet's probes still get in: Kubernetes lets traffic from a pod's own node
 
 **Alternatives:** k3d's defaults, which published the API on all interfaces (`0.0.0.0`) on a random port, with `host.docker.internal` in the kubeconfig; pointing the kubeconfig at `127.0.0.1` by hand; correcting the hosts file's `host.docker.internal` entry.
 
-**Why:** It makes networking work long-term. With the defaults, kubectl reached the cluster through `host.docker.internal`, which Docker Desktop writes into Windows' hosts file with the machine's network address at that moment; after the address changed (from `192.168.1.64` to `192.168.1.66`), kubectl couldn't reach the cluster, and restarting Docker Desktop didn't rewrite the entry. The loopback address never changes with the network. It also stops publishing the API on the home network, and a fixed port keeps the kubeconfig's address the same when the cluster is recreated. The API server's certificate already accepts `127.0.0.1` (tested). Cost: recreating the cluster, and nothing outside this machine can reach the API, which nothing needs.
+**Why:** It makes networking work long-term. With the defaults, kubectl reached the cluster through `host.docker.internal`, which Docker Desktop writes into Windows' hosts file with the machine's network address at that moment; after the address changed (from `192.168.1.64` to `192.168.1.66`), kubectl couldn't reach the cluster, and restarting Docker Desktop didn't rewrite the entry. The loopback address never changes with the network. It also stops publishing the API on the home network, and a fixed port keeps the kubeconfig's address the same when the cluster is recreated. The API server's certificate already accepts `127.0.0.1` (tested). Cost: recreating the cluster, and nothing outside this machine can reach the API, which nothing currently needs.
+
+**Watch out:** This rules out using the local cluster from another machine, such as running Docker on a remote VM and kubectl here; that would need other `kubeAPI` values. The cloud VM of Phase 3 is a separate cluster with its own setup, so this file doesn't constrain it.
 
 **Sources:** [k3d: config file](https://k3d.io/stable/usage/configfile/) (checked November 2026).
+
+## D65 — Every slot state change sends all slots' states
+
+**Decision:** Whenever a slot's state changes, and at runner start-up, the runner writes the states of all slots as one event to the `slots` stream, such as `[idle, running 9f2c, intermission a71b]`, with each slot's position in the list as its number. The stream's last entry is the current state of every slot; the `slot:{n}` hashes and the `slot-count` key go away. The web server sends the last entry to a page when it connects, and forwards each new one. The page shows as many slots as the list holds. The number of slots stays a runner setting.
+
+**Alternatives:** D58's design: per-slot states in `slot:{n}` hashes and per-slot events, plus a `slot-count` key the web server passes to the page; or per-slot events with the page counting the slots it hears about, plus an extra event for a removed slot.
+
+**Why:** It simplifies things: the current state of every slot is always in one place, written in one command, so recovery after a restart reads one entry, and no reader can see a mix of old and new states. A lowered slot count simply shows as a shorter list, with no cleanup of removed slots and no separate count to keep in step. Valkey holds fewer keys, and the runner's and web server's users need fewer permissions. Costs: every change sends every slot's state, which at a few slots is a few dozen bytes; and the architecture's Valkey contract and events (§3, §4.2, §5.1) and the runner change now, before the web server is written.
