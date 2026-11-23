@@ -577,11 +577,11 @@ The kubelet's probes still get in: Kubernetes lets traffic from a pod's own node
 
 ## D60 — The game's phrase is the Codeword
 
-**Decision:** The phrase the Pretender hides and the Explorer looks for is called the **Codeword**, everywhere: code, docs, the glossary and the prompts' placeholder. "secret" is kept only for its technical meanings, such as Kubernetes Secrets and the API key.
+**Decision:** The phrase the Pretender hides and the Explorer looks for is called the **Codeword**, everywhere: code, docs, the glossary and the prompts' placeholder. "secret" is kept only for its technical meanings, such as Kubernetes Secrets and the API key. The author's prompts say Codeword too.
 
 **Alternatives:** Keeping "Secret".
 
-**Why:** "Secret" clashes with Kubernetes Secrets and `.env` secrets, which the runner's doc discusses alongside it.
+**Why:** "Secret" clashes with Kubernetes Secrets and `.env` secrets, which the runner's doc discusses alongside it. The prompts follow, although "the Secret" sounded more mysterious to the models: one word everywhere is easier to understand.
 
 ## D61 — Biome for linting and formatting
 
@@ -634,3 +634,11 @@ The kubelet's probes still get in: Kubernetes lets traffic from a pod's own node
 **Alternatives:** D58's design: per-slot states in `slot:{n}` hashes and per-slot events, plus a `slot-count` key the web server passes to the page; or per-slot events with the page counting the slots it hears about, plus an extra event for a removed slot.
 
 **Why:** It simplifies things: the current state of every slot is always in one place, written in one command, so recovery after a restart reads one entry, and no reader can see a mix of old and new states. A lowered slot count simply shows as a shorter list, with no cleanup of removed slot hashes and no separate count to keep in step. Valkey holds fewer keys, and the runner's and web server's users need fewer permissions. Cost: reworking the architecture's Valkey contract and events (§3, §4.2, §5.1) and the runner now, before the web server is written.
+
+## D66 — The runner waits out every message's reveal, the last one included
+
+**Decision:** After writing a message, the runner waits until browsers have revealed it, with the pacing slack (architecture §7), before it goes on: before the next message, and after a Session's last message before writing `session-end`. The intermission therefore starts only once the last message has been revealed.
+
+**Alternatives:** Writing `session-end` right after the last message, with the intermission counted from the end of the reveal instead; or leaving the last message unpaced, which let a long final message still be typing when the intermission or the next Session began.
+
+**Why:** It makes sense that the runner waits after every message, whether or not it's the last one; the same rule everywhere is simpler, and it keeps the ending, the intermission and the next Session from overlapping a message still being revealed.
