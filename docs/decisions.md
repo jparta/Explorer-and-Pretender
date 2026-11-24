@@ -585,6 +585,8 @@ The kubelet's probes still get in: Kubernetes lets traffic from a pod's own node
 
 ## D61 — Biome for linting and formatting
 
+*Biome now only lints; its formatter is off (D67).*
+
 **Decision:** The code is linted and formatted with Biome, as part of the checks.
 
 **Alternatives:** oxlint, a linter only, with formatting by `bun fmt` or Oxfmt; ESLint with typescript-eslint, with formatting by Prettier or `bun fmt`.
@@ -642,3 +644,11 @@ The kubelet's probes still get in: Kubernetes lets traffic from a pod's own node
 **Alternatives:** Writing `session-end` right after the last message, with the intermission counted from the end of the reveal instead; or leaving the last message unpaced, which let a long final message still be typing when the intermission or the next Session began.
 
 **Why:** It makes sense that the runner waits after every message, whether or not it's the last one; the same rule everywhere is simpler, and it keeps the ending, the intermission and the next Session from overlapping a message still being revealed.
+
+## D67 — No automatic code formatting
+
+**Decision:** Biome's formatter and its import sorting are off; Biome only lints. The code keeps the layout it's written with.
+
+**Alternatives:** Biome's formatter, as D61 planned, in its default or in a style matched to the existing code (2 spaces, 120-character lines, double quotes); another formatter, such as `bun fmt`.
+
+**Why:** Biome's formatting didn't make the code more readable: it removed the spaces that lined up comments, and split some lines into several and joined others into one without a clear pattern. It also reformatted the Markdown docs and the YAML manifests, changing the italics and padding the tables. Cost: nothing keeps the layout consistent, so it depends on writing carefully.
