@@ -9,7 +9,7 @@ import { callModel } from "./llm.ts";
 import { log as defaultLog, type Logger } from "./log.ts";
 import { fillPrompt, runSession } from "./session.ts";
 import type { RunSession } from "./slots.ts";
-import type { Store } from "./store.ts";
+import type { ValkeyStore } from "./store.ts";
 
 const MAX_ATTEMPTS = 3; // tries per message before the Session is interrupted (S2.5)
 const RETRY_WAIT_MS = 2_000; // long enough for a brief provider hiccup to pass, short enough not to show
@@ -30,7 +30,7 @@ export async function loadPrompts(dir: URL = promptsDir): Promise<Prompts> {
 export function createSessionRunner(options: {
   config: RunnerConfig;
   modelClient: OpenAI;
-  store: Store;
+  store: ValkeyStore;
   prompts: Prompts;
   words: WordLists;
   log?: Logger;
@@ -48,8 +48,8 @@ export function createSessionRunner(options: {
         codeword,
         explorerPrompt: prompts.explorer,
         pretenderPrompt: fillPrompt(prompts.terminal, codeword),
-        turnCap: config.turnCap,
-        revealRateCharsPerSecond: config.shared.revealRateCharsPerSecond,
+        exchangeCap: config.exchangeCap,
+        revealRateCharsPerSecond: config.sharedSettings.revealRateCharsPerSecond,
         maxAttempts: MAX_ATTEMPTS,
         retryWaitMs: RETRY_WAIT_MS,
       },
@@ -63,9 +63,9 @@ export function createSessionRunner(options: {
             signal,
           });
           if (!result.ok && !signal.aborted) {
-            log.warn("model call failed", { slot, sessionId, role, reason: result.reason, error: result.error });
+            log.warn("model call failed", { slot, sessionId, role, reason: result.reason, error: result.errorMessage });
           }
-          if (result.ok && result.cutOff) log.info("message cut off at the length cap", { slot, sessionId, role });
+          if (result.ok && result.wasCutOff) log.info("message cut off at the length cap", { slot, sessionId, role });
           return result;
         },
         write: (event) => store.writeEvent(sessionId, event),
@@ -74,7 +74,7 @@ export function createSessionRunner(options: {
           const spendTodayDollars = await store.addSpend(utcDate(), costDollars);
           log.info("call cost", { slot, sessionId, costDollars, spendTodayDollars });
         },
-        now: Date.now,
+        nowMs: Date.now,
         sleep: abortableSleep,
       },
       signal,

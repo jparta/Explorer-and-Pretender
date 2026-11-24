@@ -5,17 +5,17 @@
 // touch the network itself: Valkey, the Sessions and the clock are passed in.
 import { type Ending, type SlotState, utcDate } from "@exhibition/shared";
 import { errorFields, log as defaultLog, type Logger } from "./log.ts";
-import type { Store } from "./store.ts";
+import type { ValkeyStore } from "./store.ts";
 
 export type RunSession = (slot: number, sessionId: string, signal: AbortSignal) => Promise<Ending>;
 
-export type SlotsOptions = {
-  store: Store;
+export type SlotLoopsOptions = {
+  store: ValkeyStore;
   slotCount: number;
   intermissionMs: number;
   presenceTimeoutMs: number;
   dailySpendCapDollars: number;
-  now: () => number; // milliseconds since the epoch
+  nowMs: () => number; // since the epoch
   runSession: RunSession;
   newSessionId?: () => string;
   log?: Logger;
@@ -25,15 +25,15 @@ export type SlotsOptions = {
 type StopReason = "absent" | "shutdown";
 
 // A Session that has ended, and why.
-type Finished = { sessionId: string; ending: Ending; stopReason?: StopReason };
+type EndedSession = { sessionId: string; ending: Ending; stopReason?: StopReason };
 
 type Running = {
   state: "running";
   sessionId: string;
-  abort: AbortController;
+  abortController: AbortController;
   stopReason?: StopReason;
-  presentAtMs: number; // when presence was last confirmed
-  done: Promise<void>;
+  presenceConfirmedAtMs: number; // when presence was last confirmed
+  endingHandled: Promise<void>;
 };
 
 type Intermission = {
@@ -41,27 +41,27 @@ type Intermission = {
   sessionId?: string;
   intermissionEndsAtMs: number;
   // An ending that couldn't be written to Valkey yet; the next tick tries again.
-  unrecorded?: Finished;
+  unrecordedEnding?: EndedSession;
 };
 
 type Slot = { state: "idle" } | Running | Intermission | { state: "sleeping" };
 
-export class Slots {
-  private readonly slots: Slot[];
-  private readonly ticks: number[];
+export class SlotLoops {
+  private readonly slotStates: Slot[];
+  private readonly lastTickAtMsBySlot: number[];
   private readonly log: Logger;
   private readonly newSessionId: () => string;
   private stopping = false;
 
-  constructor(private readonly options: SlotsOptions) {
-    this.slots = Array.from({ length: options.slotCount }, (): Slot => ({ state: "idle" }));
-    this.ticks = Array.from({ length: options.slotCount }, () => 0);
+  constructor(private readonly options: SlotLoopsOptions) {
+    this.slotStates = Array.from({ length: options.slotCount }, (): Slot => ({ state: "idle" }));
+    this.lastTickAtMsBySlot = Array.from({ length: options.slotCount }, () => 0);
     this.log = options.log ?? defaultLog;
     this.newSessionId = options.newSessionId ?? (() => crypto.randomUUID());
   }
 
   // On start-up: picks up the slot states a previous runner left (architecture 9).
-  async recover(): Promise<void> {
+  async resumePreviousSlotStates(): Promise<void> {
     const { store, slotCount } = this.options;
 
     // Slots beyond a lowered count: end their Sessions and remove them, so no reader
@@ -82,79 +82,79 @@ export class Slots {
         case "running":
           // Only a crash leaves a slot running: a clean shutdown moves it to its intermission.
           if (previousState.sessionId) await this.endIfUnended(n, previousState.sessionId);
-          await this.enter(n, this.intermission(previousState.sessionId));
+          await this.setSlotState(n, this.intermissionStartingNow(previousState.sessionId));
           break;
         case "intermission":
-          this.slots[n] = this.intermission(previousState.sessionId);
+          this.slotStates[n] = this.intermissionStartingNow(previousState.sessionId);
           break;
         case "sleeping":
-          this.slots[n] = { state: "sleeping" };
+          this.slotStates[n] = { state: "sleeping" };
           break;
         case "idle":
-          this.slots[n] = { state: "idle" };
+          this.slotStates[n] = { state: "idle" };
           break;
         default:
-          await this.enter(n, { state: "idle" });
+          await this.setSlotState(n, { state: "idle" });
       }
     }
   }
 
   async tickAll(): Promise<void> {
-    await Promise.all(this.slots.map((_, n) => this.tick(n)));
+    await Promise.all(this.slotStates.map((_, n) => this.tick(n)));
   }
 
   // One check of slot n. Errors are logged, and the next tick tries again.
   async tick(n: number): Promise<void> {
     try {
-      if (!this.stopping) await this.step(n);
+      if (!this.stopping) await this.advanceSlot(n);
     } catch (error) {
       this.log.error("slot check failed", { slot: n, ...errorFields(error) });
     } finally {
-      this.ticks[n] = this.options.now();
+      this.lastTickAtMsBySlot[n] = this.options.nowMs();
     }
   }
 
   // When each slot last finished a tick, for the liveness probe.
   lastTickAtMs(): number[] {
-    return [...this.ticks];
+    return [...this.lastTickAtMsBySlot];
   }
 
   // Resolves once slot n's running Session, if any, has ended and its ending is handled.
-  async whenFinished(n: number): Promise<void> {
-    const slot = this.slots[n];
-    if (slot?.state === "running") await slot.done;
+  async whenSessionEnded(n: number): Promise<void> {
+    const slot = this.slotStates[n];
+    if (slot?.state === "running") await slot.endingHandled;
   }
 
   // Ends running Sessions as interrupted and starts their intermission (architecture 9).
   async shutdown(): Promise<void> {
     this.stopping = true;
-    const running = this.slots.filter((slot): slot is Running => slot.state === "running");
+    const running = this.slotStates.filter((slot): slot is Running => slot.state === "running");
     for (const slot of running) this.stop(slot, "shutdown");
-    await Promise.all(running.map((slot) => slot.done));
+    await Promise.all(running.map((slot) => slot.endingHandled));
   }
 
-  private async step(n: number): Promise<void> {
-    const { store, now } = this.options;
-    const slot = this.slots[n];
+  private async advanceSlot(n: number): Promise<void> {
+    const { store, nowMs } = this.options;
+    const slot = this.slotStates[n];
     if (!slot) throw new Error(`No slot ${n}`);
     switch (slot.state) {
       case "idle":
-        if (await this.asleep()) await this.enter(n, { state: "sleeping" });
-        else if (await store.isWatched(n)) await this.start(n);
+        if (await this.isMachineSleeping()) await this.setSlotState(n, { state: "sleeping" });
+        else if (await store.isWatched(n)) await this.startSession(n);
         return;
       case "running":
-        await this.checkPresence(slot);
+        await this.stopIfNobodyPresent(slot);
         return;
       case "intermission":
-        if (slot.unrecorded) await this.writeEndingAndMoveOn(n, slot.unrecorded);
-        else if (await this.asleep()) await this.enter(n, { state: "sleeping" });
-        else if (now() >= slot.intermissionEndsAtMs) {
-          if (await store.isWatched(n)) await this.start(n);
-          else await this.enter(n, { state: "idle" });
+        if (slot.unrecordedEnding) await this.endSessionAndSetNextState(n, slot.unrecordedEnding);
+        else if (await this.isMachineSleeping()) await this.setSlotState(n, { state: "sleeping" });
+        else if (nowMs() >= slot.intermissionEndsAtMs) {
+          if (await store.isWatched(n)) await this.startSession(n);
+          else await this.setSlotState(n, { state: "idle" });
         }
         return;
       case "sleeping":
-        if (!(await this.asleep())) await this.enter(n, { state: "idle" });
+        if (!(await this.isMachineSleeping())) await this.setSlotState(n, { state: "idle" });
         return;
     }
   }
@@ -162,36 +162,36 @@ export class Slots {
   // The machine sleeps once the day's spend reaches the cap, or once the provider
   // refused a call because the key's daily limit or the prepaid credit is spent (S6.2,
   // D59). The date is always today's in UTC, so sleeping ends at midnight.
-  private async asleep(): Promise<boolean> {
-    const { store, now, dailySpendCapDollars } = this.options;
-    const date = utcDate(new Date(now()));
-    return (await store.isSleeping(date)) || (await store.spend(date)) >= dailySpendCapDollars;
+  private async isMachineSleeping(): Promise<boolean> {
+    const { store, nowMs, dailySpendCapDollars } = this.options;
+    const date = utcDate(new Date(nowMs()));
+    return (await store.isSleeping(date)) || (await store.readSpendDollars(date)) >= dailySpendCapDollars;
   }
 
   // Nobody present: stop the Session. Presence that can't be checked because of an error
   // counts as present until the timeout runs out (runner component doc, section 2.5).
-  private async checkPresence(slot: Running): Promise<void> {
-    const { store, now, presenceTimeoutMs } = this.options;
+  private async stopIfNobodyPresent(slot: Running): Promise<void> {
+    const { store, nowMs, presenceTimeoutMs } = this.options;
     let present: boolean;
     try {
       present = await store.isPresent();
     } catch (error) {
-      if (now() - slot.presentAtMs > presenceTimeoutMs) this.stop(slot, "absent");
+      if (nowMs() - slot.presenceConfirmedAtMs > presenceTimeoutMs) this.stop(slot, "absent");
       throw error;
     }
-    if (present) slot.presentAtMs = now();
+    if (present) slot.presenceConfirmedAtMs = nowMs();
     else this.stop(slot, "absent");
   }
 
   private stop(slot: Running, reason: StopReason): void {
     slot.stopReason ??= reason;
-    slot.abort.abort();
+    slot.abortController.abort();
   }
 
   // Announces a new Session: the stream first, then the slot state, so the stream
   // exists before anyone is told about it (architecture 6.2).
-  private async start(n: number): Promise<void> {
-    const { store, now, runSession } = this.options;
+  private async startSession(n: number): Promise<void> {
+    const { store, nowMs, runSession } = this.options;
     const sessionId = this.newSessionId();
     await store.writeEvent(sessionId, { type: "session-start", sessionId, slot: n, kind: "terminal" });
     try {
@@ -202,18 +202,18 @@ export class Slots {
       throw error;
     }
 
-    const abort = new AbortController();
-    const running: Running = { state: "running", sessionId, abort, presentAtMs: now(), done: Promise.resolve() };
-    this.slots[n] = running;
+    const abortController = new AbortController();
+    const running: Running = { state: "running", sessionId, abortController, presenceConfirmedAtMs: nowMs(), endingHandled: Promise.resolve() };
+    this.slotStates[n] = running;
     this.log.info("Session started", { slot: n, sessionId });
-    running.done = runSession(n, sessionId, abort.signal)
+    running.endingHandled = runSession(n, sessionId, abortController.signal)
       .catch((error): Ending => {
         this.log.error("Session failed", { slot: n, sessionId, ...errorFields(error) });
         return "interrupted";
       })
       .then((ending) => {
         this.log.info("Session ended", { slot: n, sessionId, ending });
-        return this.writeEndingAndMoveOn(n, { sessionId, ending, stopReason: running.stopReason });
+        return this.endSessionAndSetNextState(n, { sessionId, ending, stopReason: running.stopReason });
       });
   }
 
@@ -221,24 +221,24 @@ export class Slots {
   // ending, to sleeping if the machine sleeps now, otherwise to the intermission. If a
   // write fails, the slot waits in its intermission and the next tick tries again, so
   // the stream still gets its session-end and its expiry.
-  private async writeEndingAndMoveOn(n: number, finished: Finished): Promise<void> {
-    const { store, now } = this.options;
+  private async endSessionAndSetNextState(n: number, endedSession: EndedSession): Promise<void> {
+    const { store, nowMs } = this.options;
     try {
       // A retry checks first whether the earlier try got as far as session-end, and
       // then still sets the expiry, which may be what failed.
-      const isRetry = this.slots[n]?.state === "intermission" && this.slots[n].unrecorded !== undefined;
-      if (isRetry && (await store.lastEvent(finished.sessionId))?.type === "session-end") {
-        await store.expireSession(finished.sessionId);
+      const isRetry = this.slotStates[n]?.state === "intermission" && this.slotStates[n].unrecordedEnding !== undefined;
+      if (isRetry && (await store.readLastEvent(endedSession.sessionId))?.type === "session-end") {
+        await store.expireSession(endedSession.sessionId);
       } else {
-        await store.endSession(finished.sessionId, finished.ending);
+        await store.endSession(endedSession.sessionId, endedSession.ending);
       }
-      if (finished.ending === "sleeping") await store.setSleeping(utcDate(new Date(now())));
-      if (finished.stopReason === "absent") await this.enter(n, { state: "idle" });
-      else if (finished.stopReason !== "shutdown" && (await this.asleep())) await this.enter(n, { state: "sleeping" });
-      else await this.enter(n, this.intermission(finished.sessionId));
+      if (endedSession.ending === "sleeping") await store.setSleeping(utcDate(new Date(nowMs())));
+      if (endedSession.stopReason === "absent") await this.setSlotState(n, { state: "idle" });
+      else if (endedSession.stopReason !== "shutdown" && (await this.isMachineSleeping())) await this.setSlotState(n, { state: "sleeping" });
+      else await this.setSlotState(n, this.intermissionStartingNow(endedSession.sessionId));
     } catch (error) {
-      this.slots[n] = { ...this.intermission(finished.sessionId), unrecorded: finished };
-      this.log.error("recording the ending failed", { slot: n, sessionId: finished.sessionId, ...errorFields(error) });
+      this.slotStates[n] = { ...this.intermissionStartingNow(endedSession.sessionId), unrecordedEnding: endedSession };
+      this.log.error("recording the ending failed", { slot: n, sessionId: endedSession.sessionId, ...errorFields(error) });
     }
   }
 
@@ -246,25 +246,25 @@ export class Slots {
   // a runner can die between writing session-end and moving the slot on.
   private async endIfUnended(n: number, sessionId: string): Promise<void> {
     const { store } = this.options;
-    if ((await store.lastEvent(sessionId))?.type === "session-end") return;
+    if ((await store.readLastEvent(sessionId))?.type === "session-end") return;
     await store.endSession(sessionId, "interrupted");
     this.log.info("ended a Session left running", { slot: n, sessionId });
   }
 
-  private intermission(sessionId: string | undefined): Intermission {
+  private intermissionStartingNow(sessionId: string | undefined): Intermission {
     return {
       state: "intermission",
       ...(sessionId ? { sessionId } : {}),
-      intermissionEndsAtMs: this.options.now() + this.options.intermissionMs,
+      intermissionEndsAtMs: this.options.nowMs() + this.options.intermissionMs,
     };
   }
 
   // Sets slot n's state, here and in Valkey.
-  private async enter(n: number, newSlot: Exclude<Slot, Running>): Promise<void> {
-    const state: SlotState = newSlot.state;
-    const sessionId = newSlot.state === "intermission" ? newSlot.sessionId : undefined;
+  private async setSlotState(n: number, nextState: Exclude<Slot, Running>): Promise<void> {
+    const state: SlotState = nextState.state;
+    const sessionId = nextState.state === "intermission" ? nextState.sessionId : undefined;
     await this.options.store.setSlot({ type: "slot", slot: n, state, ...(sessionId ? { sessionId } : {}) });
-    this.slots[n] = newSlot;
+    this.slotStates[n] = nextState;
     this.log.info(`slot ${state}`, { slot: n, ...(sessionId ? { sessionId } : {}) });
   }
 }

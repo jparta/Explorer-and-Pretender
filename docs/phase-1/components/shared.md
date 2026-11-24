@@ -47,7 +47,7 @@ Each key of architecture §3 has a constant or a small function that builds its 
 |---|---|
 | `session:{id}` | Expires 60 s after the Session ends; at most 10,000 entries |
 | `slots` | At most 1,000 entries |
-| `slot:{n}` | Permanent; an empty `sessionId` means no Session, and readers drop it before checking the state against `SlotStatus`, whose `sessionId` can't be empty |
+| `slot:{n}` | Permanent; an empty `sessionId` means no Session, and readers drop it before checking the state against `SlotStateEvent`, whose `sessionId` can't be empty |
 | `slot-count` | Permanent, rewritten at each runner start (D58) |
 | `presence` | Expires after the time without viewers setting (§4), 30 s to start with |
 | `watching:{n}` | Expires 10 s after the last heartbeat |
@@ -70,19 +70,19 @@ It doesn't list what each component *may* do: that list would only repeat the us
 
 ## 4. Settings
 
-Only the settings that more than one component reads are here. The rest are settings of the component that uses them: the turn cap and the daily spend cap, for example, are the runner's, set in its ConfigMap. (The day's spend so far is counted in Valkey, in `spend:{date}`; the cap it's compared against is the runner's setting.)
+Only the settings that more than one component reads are here. The rest are settings of the component that uses them: the exchange cap and the daily spend cap, for example, are the runner's, set in its ConfigMap. (The day's spend so far is counted in Valkey, in `spend:{date}`; the cap it's compared against is the runner's setting.)
 
 | Setting | Environment variable | Default | Read by |
 |---|---|---|---|
 | Time without viewers before a Session stops | `PRESENCE_TIMEOUT_SECONDS` | 30 | web (the `presence` key's expiry), and the runner: how long a presence check that fails with an error still counts as present |
-| Reveal rate, Explorer | `REVEAL_RATE_EXPLORER` | 30 characters per second | runner (pacing), front end (typing, through web) |
-| Reveal rate, Pretender | `REVEAL_RATE_PRETENDER` | 120 characters per second | the same |
+| Reveal rate, Explorer | `REVEAL_RATE_EXPLORER_CHARS_PER_SECOND` | 30 characters per second | runner (pacing), front end (typing, through web) |
+| Reveal rate, Pretender | `REVEAL_RATE_PRETENDER_CHARS_PER_SECOND` | 120 characters per second | the same |
 
 The defaults are the spec's starting values. One ConfigMap, `settings`, generated in `deploy/base/kustomization.yaml` (D45), sets them as environment variables, and both components load it, so the values can't differ between them. The schema, `SharedEnvironment`, is exported too: a component extends it with its own settings and checks everything at once, so one error names every invalid variable, its own and the shared ones.
 
 **The slot count isn't here,** though both sides need it: it's the runner's setting, and the web server reads it from Valkey, where the runner writes it (D58). Two components reading the same setting can disagree for a moment, since a change restarts them one after the other.
 
-**An invalid value stops the component at start-up.** Each value must be a positive whole number. If one isn't, `loadSettings` throws an error naming every invalid variable, the process exits, and the pod's restarts show in `kubectl get pods` with the error in its logs. Running with a wrong value instead, such as a reveal rate of 0, would fail later and less clearly.
+**An invalid value stops the component at start-up.** Each value must be a positive whole number. If one isn't, `loadSharedSettings` throws an error naming every invalid variable, the process exits, and the pod's restarts show in `kubectl get pods` with the error in its logs. Running with a wrong value instead, such as a reveal rate of 0, would fail later and less clearly.
 
 ### 4.1 Setting or constant
 
@@ -90,7 +90,7 @@ The defaults are the spec's starting values. One ConfigMap, `settings`, generate
 
 **Everything else is a constant,** written next to the code it belongs with, for one of three reasons:
 
-- **It's tied to other code.** `watching:{n}` expires after 10 s because the page refreshes it every 5 s (`HEARTBEAT_SECONDS`); the expiry must stay longer than the interval, with room for a late heartbeat. As two constants side by side, they can't be changed apart from each other by a ConfigMap edit.
+- **It's tied to other code.** `watching:{n}` expires after 10 s because the page refreshes it every 5 s (`HEARTBEAT_INTERVAL_SECONDS`); the expiry must stay longer than the interval, with room for a late heartbeat. As two constants side by side, they can't be changed apart from each other by a ConfigMap edit.
 - **It's a safety net, not behaviour.** The stream length limits only stop a runaway stream; nobody tunes them.
 - **A decision fixed it.** The Session stream's 60 s expiry (D19), the daily keys' two days (architecture §8).
 

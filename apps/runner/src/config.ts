@@ -4,11 +4,11 @@
 import { z } from "zod";
 import { positiveWholeNumber, SharedEnvironment, toSettings } from "@exhibition/shared";
 
-const Environment = SharedEnvironment.extend({
-  SLOTS: positiveWholeNumber.default(3), // the runner owns the slot count (D58)
-  TURN_CAP: positiveWholeNumber.default(15), // exchanges (S2.4)
+const RunnerEnvironment = SharedEnvironment.extend({
+  SLOT_COUNT: positiveWholeNumber.default(3), // the runner owns the slot count (D58)
+  EXCHANGE_CAP: positiveWholeNumber.default(15), // S2.4
   INTERMISSION_SECONDS: positiveWholeNumber.default(10), // S2.8
-  DAILY_SPEND_CAP: z.coerce.number().positive().default(2), // dollars (S6.1)
+  DAILY_SPEND_CAP_DOLLARS: z.coerce.number().positive().default(2), // S6.1
   // The maximum message length (S5.3), in tokens, as the provider enforces it.
   // A placeholder until trial runs show normal message lengths.
   MAX_MESSAGE_TOKENS: positiveWholeNumber.default(1000),
@@ -24,23 +24,23 @@ const Environment = SharedEnvironment.extend({
 export type RunnerConfig = ReturnType<typeof loadRunnerConfig>;
 
 export function loadRunnerConfig(env: Record<string, string | undefined> = process.env) {
-  const result = Environment.safeParse(env);
+  const result = RunnerEnvironment.safeParse(env);
   if (!result.success) {
     throw new Error(`Invalid settings:\n${z.prettifyError(result.error)}`);
   }
-  const vars = result.data;
+  const parsedEnv = result.data;
   return {
-    shared: toSettings(vars),
-    slotCount: vars.SLOTS,
-    turnCap: vars.TURN_CAP,
-    intermissionSeconds: vars.INTERMISSION_SECONDS,
-    dailySpendCapDollars: vars.DAILY_SPEND_CAP,
-    maxMessageTokens: vars.MAX_MESSAGE_TOKENS,
-    llmBaseUrl: vars.LLM_BASE_URL,
-    explorerModel: vars.EXPLORER_MODEL,
-    pretenderModel: vars.PRETENDER_MODEL,
-    valkeyHost: vars.VALKEY_HOST,
-    valkeyPort: vars.VALKEY_PORT,
+    sharedSettings: toSettings(parsedEnv),
+    slotCount: parsedEnv.SLOT_COUNT,
+    exchangeCap: parsedEnv.EXCHANGE_CAP,
+    intermissionSeconds: parsedEnv.INTERMISSION_SECONDS,
+    dailySpendCapDollars: parsedEnv.DAILY_SPEND_CAP_DOLLARS,
+    maxMessageTokens: parsedEnv.MAX_MESSAGE_TOKENS,
+    llmBaseUrl: parsedEnv.LLM_BASE_URL,
+    explorerModel: parsedEnv.EXPLORER_MODEL,
+    pretenderModel: parsedEnv.PRETENDER_MODEL,
+    valkeyHost: parsedEnv.VALKEY_HOST,
+    valkeyPort: parsedEnv.VALKEY_PORT,
   };
 }
 

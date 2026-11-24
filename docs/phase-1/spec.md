@@ -78,7 +78,7 @@ What must be true when Phase 1 is done. Each requirement can be checked from the
 | Setting | Starting value |
 |---|---|
 | Slots | 3 |
-| Turn cap | 15 exchanges |
+| Exchange cap | 15 exchanges |
 | Intermission between Sessions | 10 s |
 | Time without viewers before a Session stops | 30 s |
 | Reveal rate, Explorer / Pretender | 30 / 120 characters per second |

@@ -2,11 +2,11 @@
 
 export type Logger = Record<"info" | "warn" | "error", (msg: string, fields?: Record<string, unknown>) => void>;
 
-const write = (level: string) => (msg: string, fields: Record<string, unknown> = {}) => {
+const logAtLevel = (level: string) => (msg: string, fields: Record<string, unknown> = {}) => {
   console.log(JSON.stringify({ time: new Date().toISOString(), level, component: "runner", msg, ...fields }));
 };
 
-export const log: Logger = { info: write("info"), warn: write("warn"), error: write("error") };
+export const log: Logger = { info: logAtLevel("info"), warn: logAtLevel("warn"), error: logAtLevel("error") };
 
 // Errors don't survive JSON.stringify. The message alone, for errors logged often,
 // such as the start-up retries while Valkey isn't up yet.

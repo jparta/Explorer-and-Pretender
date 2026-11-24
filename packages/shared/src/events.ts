@@ -13,15 +13,15 @@ export const Ending = z.enum(["found", "ran-its-course", "interrupted", "sleepin
 export type Ending = z.infer<typeof Ending>;
 
 // Phase 1 has one kind of Pretender; more come in Phase 3.
-export const Kind = z.enum(["terminal"]);
-export type Kind = z.infer<typeof Kind>;
+export const PretenderKind = z.enum(["terminal"]);
+export type PretenderKind = z.infer<typeof PretenderKind>;
 
 export const SessionEvent = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("session-start"),
     sessionId: z.string().min(1),
     slot: slotNumber,
-    kind: Kind,
+    kind: PretenderKind,
   }),
   z.object({
     type: z.literal("message"),
@@ -37,10 +37,13 @@ export const SessionEvent = z.discriminatedUnion("type", [
 ]);
 export type SessionEvent = z.infer<typeof SessionEvent>;
 
+// The message event on its own, as the conversation writes it.
+export type MessageEvent = Extract<SessionEvent, { type: "message" }>;
+
 export const SlotState = z.enum(["idle", "running", "intermission", "sleeping"]);
 export type SlotState = z.infer<typeof SlotState>;
 
-export const SlotStatus = z.object({
+export const SlotStateEvent = z.object({
   type: z.literal("slot"),
   slot: slotNumber,
   state: SlotState,
@@ -48,13 +51,13 @@ export const SlotStatus = z.object({
   // sessionId means no Session; readers drop it before checking (shared component doc, section 3).
   sessionId: z.string().min(1).optional(),
 });
-export type SlotStatus = z.infer<typeof SlotStatus>;
+export type SlotStateEvent = z.infer<typeof SlotStateEvent>;
 
 // What the browser receives over SSE: either kind of event, tagged with its slot.
 // A session-start then carries its slot twice, both the same (D55).
 export const SseEvent = z.union([
   SessionEvent.and(z.object({ slot: slotNumber })),
-  SlotStatus,
+  SlotStateEvent,
 ]);
 export type SseEvent = z.infer<typeof SseEvent>;
 
@@ -66,7 +69,7 @@ export const EVENT_FIELD = "event";
 export type Decoded<T> = { ok: true; value: T } | { ok: false; error: string };
 
 // The field-value pairs for XADD: ["event", "<json>"].
-export function toStreamFields(event: SessionEvent | SlotStatus): [string, string] {
+export function toStreamFields(event: SessionEvent | SlotStateEvent): [string, string] {
   return [EVENT_FIELD, JSON.stringify(event)];
 }
 
@@ -77,11 +80,11 @@ export function fromStreamFields<T>(schema: z.ZodType<T>, fields: readonly strin
   if (json === undefined) {
     return { ok: false, error: `no "${EVENT_FIELD}" field` };
   }
-  return parseJson(schema, json);
+  return parseAndValidateJson(schema, json);
 }
 
 // Parses and checks one event's JSON, as the browser does with SSE data.
-export function parseJson<T>(schema: z.ZodType<T>, json: string): Decoded<T> {
+export function parseAndValidateJson<T>(schema: z.ZodType<T>, json: string): Decoded<T> {
   let data: unknown;
   try {
     data = JSON.parse(json);

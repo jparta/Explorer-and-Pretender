@@ -16,7 +16,7 @@ Explorer, Pretender, Codeword and Session are always capitalised.
 - **Exchange:** one Explorer message plus the Pretender's answer.
 - **Ending:** how a Session ends.
   - *Found:* an Explorer message contains the Codeword.
-  - *Ran its course:* the turn cap was reached without the Codeword being found.
+  - *Ran its course:* the exchange cap was reached without the Codeword being found.
   - *Interrupted:* the Session could not continue, for example because the model provider kept failing.
 - **Sleeping:** the state of the exhibition from the moment the daily spend cap or the provider's daily key limit is reached, or the provider's prepaid credit runs out (D59), until the day resets at midnight UTC. No new Sessions start, and idle slots show the notice "Machine is sleeping, come back tomorrow".
 

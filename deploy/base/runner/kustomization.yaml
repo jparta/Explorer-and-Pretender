@@ -9,10 +9,10 @@ resources:
 configMapGenerator:
   - name: runner-config
     literals:
-      - SLOTS=3  # the runner owns the slot count and tells the web server through Valkey (D58)
-      - TURN_CAP=15
+      - SLOT_COUNT=3  # the runner owns the slot count and tells the web server through Valkey (D58)
+      - EXCHANGE_CAP=15
       - INTERMISSION_SECONDS=10
-      - DAILY_SPEND_CAP=2
+      - DAILY_SPEND_CAP_DOLLARS=2
       # High while trying the models, so the cap doesn't cut messages or reasoning short;
       # set after the trial runs show normal message lengths (S5.3).
       - MAX_MESSAGE_TOKENS=50000

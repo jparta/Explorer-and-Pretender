@@ -19,7 +19,7 @@ The code is in `apps/runner/`, the manifests in `deploy/base/runner/`. Each sour
 
 ## 2. How it works
 
-`slots.ts` and `session.ts` don't touch the network themselves: they get Valkey, the model and the clock passed in. That's what lets the tests run them against stand-in Sessions, a scripted model and a fake clock (§8).
+`slots.ts` and `session.ts` don't touch the network themselves: they get Valkey, the model and the clock passed in. That's what lets the tests run them against fake Sessions, a scripted model and a fake clock (§8).
 
 ### 2.1 The slot loops
 
@@ -139,10 +139,10 @@ The runner has no readiness probe, since nothing sends it traffic (D29).
 
 | Setting | Environment variable | |
 |---|---|---|
-| Slot count | `SLOTS` | D58 |
-| Turn cap | `TURN_CAP` | S2.4 |
+| Slot count | `SLOT_COUNT` | D58 |
+| Exchange cap | `EXCHANGE_CAP` | S2.4 |
 | Intermission, in seconds | `INTERMISSION_SECONDS` | S2.8 |
-| Daily spend cap, in dollars | `DAILY_SPEND_CAP` | S6.1 |
+| Daily spend cap, in dollars | `DAILY_SPEND_CAP_DOLLARS` | S6.1 |
 | Maximum message length, in tokens | `MAX_MESSAGE_TOKENS` | S5.3. Set high in `runner-config` while trying the models, so it cuts neither messages nor reasoning short; set properly after the trial runs |
 | Provider endpoint | `LLM_BASE_URL` | S5.2 |
 | Explorer's model | `EXPLORER_MODEL` | S5.1 |
@@ -208,13 +208,13 @@ bun test apps/runner
 The tests need Docker: those touching Valkey start a throwaway Valkey container from the cluster's image, with the cluster's user list (`@exhibition/shared/testing`), and log in as the runner's own user. They take a few seconds. Each test file starts with a comment saying what it covers. In short:
 
 - **Each part on its own:** settings and Secret files, Codewords and their word lists, the health check.
-- **Model calls,** against a stand-in provider: the request, cost, cut-off messages, OpenRouter's limit refusals under either status, failures with their status, timeouts and stopping.
+- **Model calls,** against a fake provider: the request, cost, cut-off messages, OpenRouter's limit refusals under either status, failures with their status, timeouts and stopping.
 - **A Session,** with scripted models on a fake clock, where sleeping only moves the clock, so pacing is checked exactly and the tests take no time.
 - **Valkey operations:** every read and write, expiry times and the fallbacks for unreadable data included.
-- **Slot loops,** with stand-in Sessions that end or fail when the test says.
+- **Slot loops,** with fake Sessions that end or fail when the test says.
 - **The happy path, end to end** (`runner.test.ts`): a watched slot runs a whole Session through the real slot loop, conversation, model calls and Valkey operations, with the real prompts and word lists, until the Explorer finds the Codeword. It checks only what crosses the runner's boundaries: what it sends the provider and what it leaves in Valkey.
 
-The stand-in provider runs inside the test process, on this machine, outside the cluster and its NetworkPolicy; that's why it can be reached at a local address that the runner's pod couldn't.
+The fake provider runs inside the test process, on this machine, outside the cluster and its NetworkPolicy; that's why it can be reached at a local address that the runner's pod couldn't.
 
 `main.ts` has no tests of its own: it only starts and stops the parts. Running it in the cluster checks it (below).
 
@@ -227,7 +227,7 @@ The stand-in provider runs inside the test process, on this machine, outside the
 - Scaling Valkey to 0 for 50 s: the liveness probe fails, Kubernetes restarts the runner, and it starts once Valkey is back.
 - The NetworkPolicy, from inside the runner's pod: `openrouter.ai:443` and `valkey:6379` connect. The Kubernetes API (`10.43.0.1:443`) and a private address are refused, and so is `openrouter.ai:80`, since only port 443 is open. From a throwaway pod, connecting to the runner's health port is refused. The liveness probe keeps passing.
 - Missing models and an empty API key file each stop the runner at start-up with an error naming them, never the key's value. In development the pod then stays running with the error in its log (§6.4).
-- Lowering `SLOTS` from 3 to 2 removes `slot:2` and rewrites `slot-count`; raising it back recreates the slot as idle.
+- Lowering `SLOT_COUNT` from 3 to 2 removes `slot:2` and rewrites `slot-count`; raising it back recreates the slot as idle.
 - Starting the runner while Valkey is down: it logs that it's waiting every 5 s, and starts as soon as Valkey answers.
 - The NetworkPolicy's reserved ranges: a link-local address (`169.254.169.254`, where cloud metadata services answer) and a carrier-grade NAT address are refused too.
 

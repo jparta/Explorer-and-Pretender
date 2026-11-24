@@ -5,11 +5,11 @@ import OpenAI from "openai";
 export type ChatMessage = OpenAI.Chat.ChatCompletionMessageParam;
 
 export type ModelResult =
-  // cutOff: the message reached the length cap (S5.3) and was cut there.
-  | { ok: true; text: string; costDollars: number; cutOff: boolean }
-  // key-limit: the key's own daily limit is spent (S6.3). credits: the account's
+  // wasCutOff: the message reached the length cap (S5.3) and was cut there.
+  | { ok: true; text: string; costDollars: number; wasCutOff: boolean }
+  // key-limit-reached: the key's own daily limit is spent (S6.3). credits-spent: the account's
   // prepaid credit is spent (D59). costDollars: what the call cost anyway, if anything.
-  | { ok: false; reason: "key-limit" | "credits" | "failed"; error: string; costDollars: number };
+  | { ok: false; reason: "key-limit-reached" | "credits-spent" | "failed"; errorMessage: string; costDollars: number };
 
 // OpenRouter's fields beyond the OpenAI API (D13). The package keeps them at runtime;
 // they're only missing from its types.
@@ -41,7 +41,7 @@ export async function callModel(request: {
       { signal: request.signal },
     );
   } catch (error) {
-    return failure(error);
+    return toFailedResult(error);
   }
 
   const costDollars = (completion.usage as OpenRouterUsage | undefined)?.cost ?? 0;
@@ -52,22 +52,22 @@ export async function callModel(request: {
   // An empty answer, even one cut off at the cap (a reasoning model can spend the whole
   // cap on reasoning), is a failure to retry; it may still have cost money.
   if (text === "") {
-    return { ok: false, reason: "failed", error: `empty answer (finish_reason ${choice?.finish_reason})`, costDollars };
+    return { ok: false, reason: "failed", errorMessage: `empty answer (finish_reason ${choice?.finish_reason})`, costDollars };
   }
-  return { ok: true, text, costDollars, cutOff: choice?.finish_reason === "length" };
+  return { ok: true, text, costDollars, wasCutOff: choice?.finish_reason === "length" };
 }
 
-function failure(error: unknown): ModelResult {
+function toFailedResult(error: unknown): ModelResult {
   if (error instanceof OpenAI.APIError && error.status !== undefined) {
     // OpenRouter names the limit that refused the call. Its docs disagree on whether the
     // status is 402 or 403, so only the name is used.
     const limitSource = (error.error as OpenRouterError | undefined)?.metadata?.limit_source;
     const reason =
-      limitSource === "openrouter_key_limit" ? "key-limit" : limitSource === "openrouter_credits" ? "credits" : "failed";
+      limitSource === "openrouter_key_limit" ? "key-limit-reached" : limitSource === "openrouter_credits" ? "credits-spent" : "failed";
     // The package's message usually starts with the status already.
     const message = error.message.startsWith(String(error.status)) ? error.message : `${error.status} ${error.message}`;
-    return { ok: false, reason, error: message, costDollars: 0 };
+    return { ok: false, reason, errorMessage: message, costDollars: 0 };
   }
   // No HTTP status: a connection error, a timeout or a stop.
-  return { ok: false, reason: "failed", error: error instanceof Error ? error.message : String(error), costDollars: 0 };
+  return { ok: false, reason: "failed", errorMessage: error instanceof Error ? error.message : String(error), costDollars: 0 };
 }

@@ -11,11 +11,11 @@ import {
   SessionEvent,
   sessionKey,
   SLOT_COUNT_KEY,
-  SLOTS_KEY,
-  SLOTS_MAX_ENTRIES,
+  SLOT_STATES_KEY,
+  SLOT_STATES_MAX_ENTRIES,
   slotKey,
   SlotState,
-  type SlotStatus,
+  type SlotStateEvent,
   sleepingKey,
   spendKey,
   toStreamFields,
@@ -44,7 +44,7 @@ export function fieldsToObject(list: string[]): Record<string, string> {
   return object;
 }
 
-export class Store {
+export class ValkeyStore {
   constructor(
     private readonly client: RedisClient,
     private readonly log: Logger = defaultLog,
@@ -72,7 +72,7 @@ export class Store {
   }
 
   // The stream's last event, or nothing if there's no stream or its last entry can't be read.
-  async lastEvent(sessionId: string): Promise<SessionEvent | undefined> {
+  async readLastEvent(sessionId: string): Promise<SessionEvent | undefined> {
     const reply = (await this.client.send("XREVRANGE", [sessionKey(sessionId), "+", "-", "COUNT", "1"])) as
       | [string, string[]][]
       | null;
@@ -89,15 +89,15 @@ export class Store {
   // Writes slot:{n} in one command, then announces the change on the slots stream. A
   // state without a Session writes an empty sessionId, which means no Session
   // (architecture 3).
-  async setSlot(status: SlotStatus): Promise<void> {
+  async setSlot(status: SlotStateEvent): Promise<void> {
     await this.client.send("HSET", [slotKey(status.slot), "state", status.state, "sessionId", status.sessionId ?? ""]);
     await this.client.send("XADD", [
-      SLOTS_KEY, "MAXLEN", "~", String(SLOTS_MAX_ENTRIES), "*", ...toStreamFields(status),
+      SLOT_STATES_KEY, "MAXLEN", "~", String(SLOT_STATES_MAX_ENTRIES), "*", ...toStreamFields(status),
     ]);
   }
 
   // The slot's state, or nothing if it was never written or holds an unknown state.
-  async readSlot(slot: number): Promise<SlotStatus | undefined> {
+  async readSlot(slot: number): Promise<SlotStateEvent | undefined> {
     const reply = await this.client.send("HGETALL", [slotKey(slot)]);
     const fields: Record<string, string> = Array.isArray(reply) ? fieldsToObject(reply) : (reply ?? {});
     if (fields.state === undefined) return undefined;
@@ -137,16 +137,16 @@ export class Store {
   }
 
   // The day's spend in dollars; a day without a key counts as 0 (architecture 8).
-  async spend(date: string): Promise<number> {
+  async readSpendDollars(date: string): Promise<number> {
     const value = await this.client.send("GET", [spendKey(date)]);
     return value === null ? 0 : Number(value);
   }
 
   // Adds one call's cost and returns the day's total.
   async addSpend(date: string, costDollars: number): Promise<number> {
-    const total = await this.client.send("INCRBYFLOAT", [spendKey(date), String(costDollars)]);
+    const totalDollars = await this.client.send("INCRBYFLOAT", [spendKey(date), String(costDollars)]);
     await this.client.send("EXPIRE", [spendKey(date), String(DAILY_KEY_EXPIRE_SECONDS)]);
-    return Number(total);
+    return Number(totalDollars);
   }
 
   async isSleeping(date: string): Promise<boolean> {

@@ -100,12 +100,12 @@ Each `message` event holds one whole message (D31). The browser opens a message 
 
 ### 4.2 Slot state
 
-The runner writes a `SlotStatus` to `slots` whenever a slot's state changes, and mirrors it in `slot:{n}`:
+The runner writes a `SlotStateEvent` to `slots` whenever a slot's state changes, and mirrors it in `slot:{n}`:
 
 ```ts
 type SlotState = "idle" | "running" | "intermission" | "sleeping";
 
-type SlotStatus = {
+type SlotStateEvent = {
   type: "slot";
   slot: number;
   state: SlotState;
@@ -123,7 +123,7 @@ type SlotStatus = {
 The browser receives both kinds over one SSE connection, each tagged with its slot:
 
 ```ts
-type SseEvent = { slot: number } & (SessionEvent | SlotStatus);  // D55
+type SseEvent = { slot: number } & (SessionEvent | SlotStateEvent);  // D55
 ```
 
 ## 5. HTTP endpoints

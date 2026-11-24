@@ -1,7 +1,7 @@
 // Codewords of the form adjective-noun-verb (S3.1, D60, D63), drawn from word lists
 // per kind of Pretender in apps/runner/words/<kind>/, chosen and checked by the author,
 // which is how offensive words are kept out (S3.2).
-import type { Kind } from "@exhibition/shared";
+import type { PretenderKind } from "@exhibition/shared";
 
 const wordsDir = new URL("../words/", import.meta.url);
 
@@ -13,8 +13,8 @@ export type WordLists = {
 
 // Refuses an empty list, so the runner stops at start-up rather than failing later,
 // when a Codeword is drawn.
-export async function loadWordLists(kind: Kind, dir: URL = wordsDir): Promise<WordLists> {
-  const read = async (name: string) => {
+export async function loadWordLists(kind: PretenderKind, dir: URL = wordsDir): Promise<WordLists> {
+  const readList = async (name: string) => {
     const path = `${kind}/${name}.txt`;
     const words = (await Bun.file(new URL(path, dir)).text())
       .split("\n")
@@ -24,9 +24,9 @@ export async function loadWordLists(kind: Kind, dir: URL = wordsDir): Promise<Wo
     return words;
   };
   return {
-    adjectives: await read("adjectives"),
-    nouns: await read("nouns"),
-    verbs: await read("verbs"),
+    adjectives: await readList("adjectives"),
+    nouns: await readList("nouns"),
+    verbs: await readList("verbs"),
   };
 }
 

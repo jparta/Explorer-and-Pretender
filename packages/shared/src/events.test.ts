@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
   fromStreamFields,
   SseEvent,
-  parseJson,
+  parseAndValidateJson,
   SessionEvent,
-  SlotStatus,
+  SlotStateEvent,
   toStreamFields,
 } from "./events.ts";
 
@@ -23,8 +23,8 @@ describe("stream entries", () => {
   });
 
   test("a slot status survives the trip", () => {
-    const status: SlotStatus = { type: "slot", slot: 0, state: "running", sessionId: "9f2c" };
-    expect(fromStreamFields(SlotStatus, toStreamFields(status))).toEqual({ ok: true, value: status });
+    const status: SlotStateEvent = { type: "slot", slot: 0, state: "running", sessionId: "9f2c" };
+    expect(fromStreamFields(SlotStateEvent, toStreamFields(status))).toEqual({ ok: true, value: status });
   });
 
   test("the event field is found among other fields", () => {
@@ -59,12 +59,12 @@ describe("checking shapes", () => {
   ];
 
   test.each(rejected)("rejects %s", (_, data) => {
-    const result = parseJson(SessionEvent, JSON.stringify(data));
+    const result = parseAndValidateJson(SessionEvent, JSON.stringify(data));
     expect(result.ok).toBe(false);
   });
 
   test("the error says what is wrong", () => {
-    const result = parseJson(SessionEvent, JSON.stringify({ type: "message", role: "viewer", text: "hi" }));
+    const result = parseAndValidateJson(SessionEvent, JSON.stringify({ type: "message", role: "viewer", text: "hi" }));
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain("role");
   });
@@ -72,11 +72,11 @@ describe("checking shapes", () => {
 
 describe("SSE events", () => {
   test("a Session event needs its slot", () => {
-    expect(parseJson(SseEvent, JSON.stringify({ type: "message", role: "explorer", text: "ls" })).ok).toBe(false);
-    expect(parseJson(SseEvent, JSON.stringify({ slot: 1, type: "message", role: "explorer", text: "ls" })).ok).toBe(true);
+    expect(parseAndValidateJson(SseEvent, JSON.stringify({ type: "message", role: "explorer", text: "ls" })).ok).toBe(false);
+    expect(parseAndValidateJson(SseEvent, JSON.stringify({ slot: 1, type: "message", role: "explorer", text: "ls" })).ok).toBe(true);
   });
 
   test("a slot status is an SSE event as it is", () => {
-    expect(parseJson(SseEvent, JSON.stringify({ type: "slot", slot: 0, state: "idle" })).ok).toBe(true);
+    expect(parseAndValidateJson(SseEvent, JSON.stringify({ type: "slot", slot: 0, state: "idle" })).ok).toBe(true);
   });
 });

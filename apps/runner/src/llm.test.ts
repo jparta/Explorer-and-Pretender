@@ -1,9 +1,9 @@
-// Model calls against a stand-in provider served from this test process: requests, cost,
+// Model calls against a fake provider served from this test process: requests, cost,
 // cut-off messages, OpenRouter's limit refusals, failures, timeouts and stopping.
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { callModel, createModelClient } from "./llm.ts";
 
-// A stand-in for the provider: answers each request with the response a test sets.
+// A fake for the provider: answers each request with the response a test sets.
 let requests: { headers: Headers; body: Record<string, unknown> }[] = [];
 let respond: () => Response | Promise<Response> = () => new Response("not set", { status: 500 });
 const provider = Bun.serve({
@@ -18,12 +18,12 @@ beforeEach(() => {
   requests = [];
 });
 
-const client = (timeoutMs = 2_000) =>
+const makeClient = (timeoutMs = 2_000) =>
   createModelClient({ baseUrl: `http://localhost:${provider.port}/api/v1`, apiKey: "sk-test", timeoutMs });
 
 const call = (options: { timeoutMs?: number; signal?: AbortSignal } = {}) =>
   callModel({
-    client: client(options.timeoutMs),
+    client: makeClient(options.timeoutMs),
     model: "vendor/model",
     maxTokens: 200,
     messages: [{ role: "user", content: "hello" }],
@@ -44,7 +44,7 @@ const refusal = (status: number, limitSource: string) =>
 describe("callModel", () => {
   test("sends a chat completion and returns the text and cost", async () => {
     respond = () => answer("ls -la");
-    expect(await call()).toEqual({ ok: true, text: "ls -la", costDollars: 0.0012, cutOff: false });
+    expect(await call()).toEqual({ ok: true, text: "ls -la", costDollars: 0.0012, wasCutOff: false });
     expect(requests).toHaveLength(1);
     expect(requests[0]!.headers.get("authorization")).toBe("Bearer sk-test");
     expect(requests[0]!.body).toMatchObject({
@@ -61,7 +61,7 @@ describe("callModel", () => {
 
   test("a message cut off at the length cap is kept, and marked", async () => {
     respond = () => answer("ls -la /ho", "length");
-    expect(await call()).toEqual({ ok: true, text: "ls -la /ho", costDollars: 0.0012, cutOff: true });
+    expect(await call()).toEqual({ ok: true, text: "ls -la /ho", costDollars: 0.0012, wasCutOff: true });
   });
 
   test("an empty message cut off at the cap is a failure that still cost money", async () => {
@@ -72,13 +72,13 @@ describe("callModel", () => {
 
   test.each([402, 403])("the key's own limit, under status %d, is recognized by OpenRouter's limit_source", async (status) => {
     respond = () => refusal(status, "openrouter_key_limit");
-    expect(await call()).toMatchObject({ ok: false, reason: "key-limit", costDollars: 0 });
+    expect(await call()).toMatchObject({ ok: false, reason: "key-limit-reached", costDollars: 0 });
   });
 
   test.each([402, 403])("spent prepaid credit, under status %d, is recognized (D59)", async (status) => {
     respond = () => refusal(status, "openrouter_credits");
 
-    expect(await call()).toMatchObject({ ok: false, reason: "credits" });
+    expect(await call()).toMatchObject({ ok: false, reason: "credits-spent" });
   });
 
   test("other refusals and errors are failures, reporting the HTTP status", async () => {
@@ -90,7 +90,7 @@ describe("callModel", () => {
       respond = response;
       const result = await call();
       expect(result).toMatchObject({ ok: false, reason: "failed" });
-      expect(!result.ok && result.error).toContain(status);
+      expect(!result.ok && result.errorMessage).toContain(status);
     }
   });
 

@@ -1,6 +1,6 @@
 // The happy path, end to end: a watched slot starts a Session that runs through the real
 // slot loop, conversation, model calls and Valkey operations, with the real prompts and
-// word lists, until the Explorer finds the Codeword. Only the provider is a stand-in,
+// word lists, until the Explorer finds the Codeword. Only the provider is a fake,
 // served from this test process. Checks only what crosses the runner's boundaries: what
 // it sends the provider, and what it leaves in Valkey. Needs Docker.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -11,13 +11,13 @@ import { loadWordLists } from "./codeword.ts";
 import { loadRunnerConfig } from "./config.ts";
 import { createModelClient } from "./llm.ts";
 import { abortableSleep, createSessionRunner, loadPrompts } from "./runner.ts";
-import { Slots } from "./slots.ts";
-import { connectValkey, Store } from "./store.ts";
-import { entries, hash } from "./valkey-test-helpers.ts";
+import { SlotLoops } from "./slots.ts";
+import { connectValkey, ValkeyStore } from "./store.ts";
+import { readHash, readStreamEvents } from "./valkey-test-helpers.ts";
 
-const COST_PER_CALL = 0.01;
+const COST_PER_CALL_DOLLARS = 0.01;
 
-// The stand-in provider plays both models. The Pretender answers with the Codeword,
+// The fake provider plays both models. The Pretender answers with the Codeword,
 // taken from the one backtick-quoted word in its system prompt; the Explorer lists
 // files first, then repeats what the Pretender said.
 const requests: { authorization: string | null; model: string; messages: { role: string; content: string }[] }[] = [];
@@ -37,7 +37,7 @@ const provider = Bun.serve({
       id: "gen",
       object: "chat.completion",
       choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop" }],
-      usage: { cost: COST_PER_CALL },
+      usage: { cost: COST_PER_CALL_DOLLARS },
     });
   },
 });
@@ -47,7 +47,7 @@ let client: RedisClient;
 
 beforeAll(async () => {
   valkey = await startValkey();
-  client = connectValkey(valkey.url("runner"));
+  client = connectValkey(valkey.urlFor("runner"));
 }, 30_000);
 afterAll(() => {
   client?.close();
@@ -61,17 +61,17 @@ test("a watched slot runs a Session until the Explorer finds the Codeword", asyn
     PRETENDER_MODEL: "test/pretender",
     LLM_BASE_URL: `http://localhost:${provider.port}/v1`,
     // Fast enough that pacing takes no noticeable time.
-    REVEAL_RATE_EXPLORER: "1000000",
-    REVEAL_RATE_PRETENDER: "1000000",
+    REVEAL_RATE_EXPLORER_CHARS_PER_SECOND: "1000000",
+    REVEAL_RATE_PRETENDER_CHARS_PER_SECOND: "1000000",
   });
-  const store = new Store(client);
-  const slots = new Slots({
+  const store = new ValkeyStore(client);
+  const slots = new SlotLoops({
     store,
     slotCount: config.slotCount,
     intermissionMs: config.intermissionSeconds * 1000,
-    presenceTimeoutMs: config.shared.presenceTimeoutSeconds * 1000,
+    presenceTimeoutMs: config.sharedSettings.presenceTimeoutSeconds * 1000,
     dailySpendCapDollars: config.dailySpendCapDollars,
-    now: Date.now,
+    nowMs: Date.now,
     runSession: createSessionRunner({
       config,
       modelClient: createModelClient({ baseUrl: config.llmBaseUrl, apiKey: "sk-test", timeoutMs: 5_000 }),
@@ -81,15 +81,15 @@ test("a watched slot runs a Session until the Explorer finds the Codeword", asyn
     }),
   });
 
-  await slots.recover();
-  await valkey.admin.send("SET", [PRESENCE_KEY, "1"]);
-  await valkey.admin.send("SET", [watchingKey(0), "1"]);
+  await slots.resumePreviousSlotStates();
+  await valkey.adminClient.send("SET", [PRESENCE_KEY, "1"]);
+  await valkey.adminClient.send("SET", [watchingKey(0), "1"]);
   await slots.tickAll();
-  await slots.whenFinished(0);
+  await slots.whenSessionEnded(0);
 
   // Valkey holds the whole Session, and the found message carries the Codeword.
-  const sessionId = (await hash(valkey.admin, slotKey(0))).sessionId!;
-  const events = await entries(valkey.admin, sessionKey(sessionId));
+  const sessionId = (await readHash(valkey.adminClient, slotKey(0))).sessionId!;
+  const events = await readStreamEvents(valkey.adminClient, sessionKey(sessionId));
   const codeword = (events[2] as { text: string }).text;
   expect(codeword).toMatch(/^[a-z]+-[a-z]+-[a-z]+$/);
   expect(events).toEqual([
@@ -99,8 +99,8 @@ test("a watched slot runs a Session until the Explorer finds the Codeword", asyn
     { type: "message", role: "explorer", text: `I found it: ${codeword}`, codeword },
     { type: "session-end", ending: "found" },
   ]);
-  expect(await hash(valkey.admin, slotKey(0))).toEqual({ state: "intermission", sessionId });
-  expect(Number(await valkey.admin.send("GET", [spendKey(utcDate())]))).toBeCloseTo(3 * COST_PER_CALL);
+  expect(await readHash(valkey.adminClient, slotKey(0))).toEqual({ state: "intermission", sessionId });
+  expect(Number(await valkey.adminClient.send("GET", [spendKey(utcDate())]))).toBeCloseTo(3 * COST_PER_CALL_DOLLARS);
 
   // The provider got each role's own model, with the API key.
   expect(requests.map((r) => r.model)).toEqual(["test/explorer", "test/pretender", "test/explorer"]);
@@ -109,18 +109,18 @@ test("a watched slot runs a Session until the Explorer finds the Codeword", asyn
 
 describe("abortableSleep", () => {
   test("waits the given time", async () => {
-    const started = performance.now();
+    const startedAtMs = performance.now();
     await abortableSleep(30, new AbortController().signal);
-    expect(performance.now() - started).toBeGreaterThanOrEqual(25);
+    expect(performance.now() - startedAtMs).toBeGreaterThanOrEqual(25);
   });
 
   test("a stop cuts it short", async () => {
     const stop = new AbortController();
-    const started = performance.now();
-    const sleeping = abortableSleep(5_000, stop.signal);
+    const startedAtMs = performance.now();
+    const sleepPromise = abortableSleep(5_000, stop.signal);
     stop.abort();
-    await expect(sleeping).rejects.toBeDefined();
-    expect(performance.now() - started).toBeLessThan(1_000);
+    await expect(sleepPromise).rejects.toBeDefined();
+    expect(performance.now() - startedAtMs).toBeLessThan(1_000);
   });
 
   test("an earlier stop rejects at once", async () => {

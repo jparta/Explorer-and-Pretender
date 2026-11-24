@@ -6,7 +6,7 @@ import {
   sessionKey,
   SLOT_COUNT_KEY,
   sleepingKey,
-  SLOTS_KEY,
+  SLOT_STATES_KEY,
   slotKey,
   spendKey,
   utcDate,
@@ -29,20 +29,20 @@ describe("utcDate", () => {
 // Needs Docker: it starts a throwaway Valkey container (shared component doc, section 3).
 describe("Valkey's user list", () => {
   const date = utcDate(new Date("2026-11-17T12:00:00Z"));
-  const session = sessionKey("9f2c");
+  const sessionStreamKey = sessionKey("9f2c");
   let valkey: TestValkey;
-  let admin: RedisClient;
+  let adminClient: RedisClient;
 
   beforeAll(async () => {
     valkey = await startValkey();
-    admin = valkey.admin;
+    adminClient = valkey.adminClient;
   }, 30_000);
 
   afterAll(() => valkey?.stop());
 
   // ACL DRYRUN answers OK, or a message saying why the command would be refused.
-  const allowed = async (user: string, command: string[]) =>
-    (await admin.send("ACL", ["DRYRUN", user, ...command])) === "OK";
+  const isAllowed = async (user: string, command: string[]) =>
+    (await adminClient.send("ACL", ["DRYRUN", user, ...command])) === "OK";
 
   // The security properties: neither writes what belongs to the other, the web server
   // can't see spend, nobody touches keys outside the contract or empties the store,
@@ -53,8 +53,8 @@ describe("Valkey's user list", () => {
     ["runner", ["DEL", spendKey(date)]],
     ["runner", ["DEL", sessionKey("9f2c")]],
 
-    ["web", ["XADD", session, "*", "event", "{}"]],
-    ["web", ["XADD", SLOTS_KEY, "*", "event", "{}"]],
+    ["web", ["XADD", sessionStreamKey, "*", "event", "{}"]],
+    ["web", ["XADD", SLOT_STATES_KEY, "*", "event", "{}"]],
     ["web", ["HSET", slotKey(0), "state", "idle"]],
     ["web", ["SET", SLOT_COUNT_KEY, "3"]],
     ["web", ["GET", spendKey(date)]],
@@ -68,6 +68,6 @@ describe("Valkey's user list", () => {
 
   test.each(refused.map(([user, command]) => [user, command.join(" "), command] as const))(
     "%s may not %s",
-    async (user, _, command) => expect(await allowed(user, command)).toBe(false),
+    async (user, _, command) => expect(await isAllowed(user, command)).toBe(false),
   );
 });

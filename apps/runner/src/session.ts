@@ -3,10 +3,8 @@
 // session-start and session-end, so every ending, an outside stop included, is written
 // in one place. Doesn't touch the network itself: the model, Valkey and the clock are
 // passed in, which lets the tests run it on a fake clock.
-import type { Ending, Role, SessionEvent } from "@exhibition/shared";
+import type { Ending, MessageEvent, Role } from "@exhibition/shared";
 import type { ChatMessage, ModelResult } from "./llm.ts";
-
-type Message = Extract<SessionEvent, { type: "message" }>;
 
 // The runner is this much slower than the display, so no backlog builds up in the
 // browser (architecture 7). To be tuned in trial runs.
@@ -19,7 +17,7 @@ export type SessionSetup = {
   explorerPrompt: string;
   // The Pretender's system prompt, with the Codeword already filled in.
   pretenderPrompt: string;
-  turnCap: number;
+  exchangeCap: number;
   revealRateCharsPerSecond: Record<Role, number>;
   maxAttempts: number; // tries per message before the Session is interrupted (S2.5)
   retryWaitMs: number;
@@ -27,9 +25,9 @@ export type SessionSetup = {
 
 export type SessionDeps = {
   callModel: (role: Role, messages: ChatMessage[], signal: AbortSignal) => Promise<ModelResult>;
-  write: (event: Message) => Promise<void>;
+  write: (event: MessageEvent) => Promise<void>;
   addSpend: (costDollars: number) => Promise<void>;
-  now: () => number; // milliseconds
+  nowMs: () => number;
   // Rejects when the signal is aborted.
   sleep: (ms: number, signal: AbortSignal) => Promise<void>;
 };
@@ -49,14 +47,14 @@ export async function runSession(setup: SessionSetup, deps: SessionDeps, signal:
   let nextWriteAtMs = 0;
 
   try {
-    for (let exchange = 1; exchange <= setup.turnCap; exchange++) {
+    for (let exchange = 1; exchange <= setup.exchangeCap; exchange++) {
       for (const role of ["explorer", "pretender"] as const) {
         const answer = await callModelWithRetries(role, contextFor(role, setup, history), setup, deps, signal);
         if (answer.kind === "ending") return answer.ending;
         const text = answer.text;
 
-        const wait = nextWriteAtMs - deps.now();
-        if (wait > 0) await deps.sleep(wait, signal);
+        const waitMs = nextWriteAtMs - deps.nowMs();
+        if (waitMs > 0) await deps.sleep(waitMs, signal);
         if (signal.aborted) return "interrupted";
 
         const found = role === "explorer" && text.includes(setup.codeword);
@@ -67,7 +65,7 @@ export async function runSession(setup: SessionSetup, deps: SessionDeps, signal:
           ...(found ? { codeword: setup.codeword } : {}),
         });
         history.push({ role, text });
-        nextWriteAtMs = deps.now() + (PACING_FACTOR * text.length * 1000) / setup.revealRateCharsPerSecond[role];
+        nextWriteAtMs = deps.nowMs() + (PACING_FACTOR * text.length * 1000) / setup.revealRateCharsPerSecond[role];
         if (found) return "found";
       }
     }

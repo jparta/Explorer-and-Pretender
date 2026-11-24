@@ -7,49 +7,50 @@ import { isAlive, startHealthServer } from "./health.ts";
 import { createModelClient } from "./llm.ts";
 import { describeError, errorFields, log } from "./log.ts";
 import { createSessionRunner, loadPrompts } from "./runner.ts";
-import { Slots } from "./slots.ts";
-import { connectValkey, Store } from "./store.ts";
+import { SlotLoops } from "./slots.ts";
+import { connectValkey, ValkeyStore } from "./store.ts";
 
 // Where the Secrets are mounted (D37), and the constants of the loop.
-const API_KEY_FILE = "/etc/llm-api/LLM_API_KEY";
+const LLM_API_KEY_FILE = "/etc/llm-api/LLM_API_KEY";
 const VALKEY_PASSWORD_FILE = "/etc/valkey-password/runner";
 const HEALTH_PORT = 8080; // the liveness probe's port, named in the Deployment
-const TICK_MS = 1_000; // each slot is checked once a second (architecture 6.2)
-const STALE_MS = 10_000; // a loop that hasn't ticked for this long fails liveness (D29)
+const TICK_INTERVAL_MS = 1_000; // each slot is checked once a second (architecture 6.2)
+const MAX_TICK_AGE_MS = 10_000; // a loop that hasn't ticked for this long fails liveness (D29)
 // Per model call: generous while the models are tried, so slow reasoning isn't cut off
 // (a timed-out call is still billed, but counts as nothing towards the spend). Three tries
 // of this, plus the waits between them, is the longest a Session can stand still before
 // it ends as interrupted (runner component doc, section 2.3).
-const CALL_TIMEOUT_MS = 5 * 60_000;
-const VALKEY_WAIT_MS = 5_000; // how long each start-up check waits for Valkey to answer
+const MODEL_CALL_TIMEOUT_MS = 5 * 60_000;
+const VALKEY_ANSWER_TIMEOUT_MS = 5_000; // how long each start-up check waits for Valkey to answer
+const VALKEY_RETRY_PAUSE_MS = 5_000; // the pause before trying again after Valkey refused or failed
 
 // A start-up error, such as a missing setting or Secret file, is logged as a JSON line
 // with its stack, and the process exits so Kubernetes restarts the container.
-start().catch((error) => {
+startRunner().catch((error) => {
   log.error("start-up failed", errorFields(error));
   process.exit(1);
 });
 
-async function start() {
+async function startRunner() {
   const config = loadRunnerConfig();
-  const apiKey = await readSecretFile(API_KEY_FILE);
+  const apiKey = await readSecretFile(LLM_API_KEY_FILE);
   const valkeyPassword = await readSecretFile(VALKEY_PASSWORD_FILE);
 
-  const client = connectValkey(
+  const valkeyClient = connectValkey(
     `valkey://runner:${encodeURIComponent(valkeyPassword)}@${config.valkeyHost}:${config.valkeyPort}`,
   );
-  const store = new Store(client);
+  const store = new ValkeyStore(valkeyClient);
 
-  const slots = new Slots({
+  const slotLoops = new SlotLoops({
     store,
     slotCount: config.slotCount,
     intermissionMs: config.intermissionSeconds * 1000,
-    presenceTimeoutMs: config.shared.presenceTimeoutSeconds * 1000,
+    presenceTimeoutMs: config.sharedSettings.presenceTimeoutSeconds * 1000,
     dailySpendCapDollars: config.dailySpendCapDollars,
-    now: Date.now,
+    nowMs: Date.now,
     runSession: createSessionRunner({
       config,
-      modelClient: createModelClient({ baseUrl: config.llmBaseUrl, apiKey, timeoutMs: CALL_TIMEOUT_MS }),
+      modelClient: createModelClient({ baseUrl: config.llmBaseUrl, apiKey, timeoutMs: MODEL_CALL_TIMEOUT_MS }),
       store,
       prompts: await loadPrompts(),
       words: await loadWordLists("terminal"),
@@ -59,21 +60,21 @@ async function start() {
   let loopsStarted = false;
   let stopping = false;
   // Alive while starting up; after that, while every slot loop keeps ticking.
-  const health = startHealthServer(
+  const healthServer = startHealthServer(
     HEALTH_PORT,
-    () => !loopsStarted || isAlive(slots.lastTickAtMs(), Date.now(), STALE_MS),
+    () => !loopsStarted || isAlive(slotLoops.lastTickAtMs(), Date.now(), MAX_TICK_AGE_MS),
   );
 
   // While Valkey is down, the endings wait in the offline queue too, so shutdown waits
   // until Kubernetes kills the pod after its 30 s grace period; the next runner's
-  // recover() then ends those Sessions (runner component doc, section 2.1).
+  // resumePreviousSlotStates() then ends those Sessions (runner component doc, section 2.1).
   const shutdown = async () => {
     if (stopping) return;
     stopping = true;
     log.info("shutting down");
-    await slots.shutdown();
-    client.close();
-    health.stop(true);
+    await slotLoops.shutdown();
+    valkeyClient.close();
+    healthServer.stop(true);
     process.exit(0);
   };
   process.on("SIGTERM", shutdown);
@@ -86,7 +87,7 @@ async function start() {
   for (;;) {
     const answered = await Promise.race([
       store.ping().then(() => true),
-      Bun.sleep(VALKEY_WAIT_MS).then(() => false),
+      Bun.sleep(VALKEY_ANSWER_TIMEOUT_MS).then(() => false),
     ]).catch((error) => {
       log.warn("start-up: Valkey refused", { error: describeError(error) });
       return false;
@@ -96,11 +97,11 @@ async function start() {
       continue;
     }
     try {
-      await slots.recover();
+      await slotLoops.resumePreviousSlotStates();
       break;
     } catch (error) {
       log.warn("start-up: picking up the slot states failed, retrying", { error: describeError(error) });
-      await Bun.sleep(VALKEY_WAIT_MS);
+      await Bun.sleep(VALKEY_RETRY_PAUSE_MS);
     }
   }
 
@@ -112,8 +113,8 @@ async function start() {
   for (let n = 0; n < config.slotCount; n++) {
     void (async () => {
       while (!stopping) {
-        await slots.tick(n);
-        await Bun.sleep(TICK_MS);
+        await slotLoops.tick(n);
+        await Bun.sleep(TICK_INTERVAL_MS);
       }
     })();
   }

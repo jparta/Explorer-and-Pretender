@@ -8,22 +8,22 @@ export const positiveWholeNumber = z.coerce.number().int().positive();
 // one go, getting one error that names every invalid variable.
 export const SharedEnvironment = z.object({
   PRESENCE_TIMEOUT_SECONDS: positiveWholeNumber.default(30),
-  REVEAL_RATE_EXPLORER: positiveWholeNumber.default(30), // characters per second
-  REVEAL_RATE_PRETENDER: positiveWholeNumber.default(120),
+  REVEAL_RATE_EXPLORER_CHARS_PER_SECOND: positiveWholeNumber.default(30),
+  REVEAL_RATE_PRETENDER_CHARS_PER_SECOND: positiveWholeNumber.default(120),
 });
 
-export type Settings = ReturnType<typeof toSettings>;
+export type SharedSettings = ReturnType<typeof toSettings>;
 
 // From checked variables to the settings object.
-export function toSettings(vars: z.infer<typeof SharedEnvironment>) {
+export function toSettings(parsedEnv: z.infer<typeof SharedEnvironment>) {
   return {
-    presenceTimeoutSeconds: vars.PRESENCE_TIMEOUT_SECONDS,
-    revealRateCharsPerSecond: { explorer: vars.REVEAL_RATE_EXPLORER, pretender: vars.REVEAL_RATE_PRETENDER },
+    presenceTimeoutSeconds: parsedEnv.PRESENCE_TIMEOUT_SECONDS,
+    revealRateCharsPerSecond: { explorer: parsedEnv.REVEAL_RATE_EXPLORER_CHARS_PER_SECOND, pretender: parsedEnv.REVEAL_RATE_PRETENDER_CHARS_PER_SECOND },
   };
 }
 
 // Throws one error naming every invalid variable, so a misconfigured component stops at start-up.
-export function loadSettings(env: Record<string, string | undefined> = process.env): Settings {
+export function loadSharedSettings(env: Record<string, string | undefined> = process.env): SharedSettings {
   const result = SharedEnvironment.safeParse(env);
   if (!result.success) {
     throw new Error(`Invalid settings:\n${z.prettifyError(result.error)}`);
