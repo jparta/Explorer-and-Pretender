@@ -7,16 +7,10 @@ export const sessionKey = (sessionId: string) => `session:${sessionId}`;
 export const SESSION_EXPIRE_SECONDS = 60; // after the Session ends (D19)
 export const SESSION_MAX_ENTRIES = 10_000; // a safety net
 
-// Changes of slot state, for the web server to follow.
+// Every slot's state, one event each time one changes; the last entry is the current
+// state of every slot (D65).
 export const SLOT_STATES_KEY = "slots";
 export const SLOT_STATES_MAX_ENTRIES = 1_000;
-
-// The current state of one slot, a hash with `state` and `sessionId`. An empty
-// sessionId means no Session.
-export const slotKey = (slot: number) => `slot:${slot}`;
-
-// The number of slots, written by the runner at start-up (D58).
-export const SLOT_COUNT_KEY = "slot-count";
 
 // Exists while any viewer is present. Its lifetime is the presenceTimeoutSeconds setting.
 export const PRESENCE_KEY = "presence";

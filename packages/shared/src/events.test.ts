@@ -4,7 +4,7 @@ import {
   SseEvent,
   parseAndValidateJson,
   SessionEvent,
-  SlotStateEvent,
+  SlotStatesEvent,
   toStreamFields,
 } from "./events.ts";
 
@@ -22,9 +22,19 @@ describe("stream entries", () => {
     expect(fromStreamFields(SessionEvent, toStreamFields(event))).toEqual({ ok: true, value: event });
   });
 
-  test("a slot status survives the trip", () => {
-    const status: SlotStateEvent = { type: "slot", slot: 0, state: "running", sessionId: "9f2c" };
-    expect(fromStreamFields(SlotStateEvent, toStreamFields(status))).toEqual({ ok: true, value: status });
+  test("every slot's state survives the trip, in order (D65)", () => {
+    const states: SlotStatesEvent = {
+      type: "slots",
+      slots: [{ state: "idle" }, { state: "running", sessionId: "9f2c" }, { state: "intermission", sessionId: "a71b" }],
+    };
+    expect(fromStreamFields(SlotStatesEvent, toStreamFields(states))).toEqual({ ok: true, value: states });
+  });
+
+  test("a slot state must be a known one, and a Session ID can't be empty", () => {
+    const parse = (slots: unknown) => parseAndValidateJson(SlotStatesEvent, JSON.stringify({ type: "slots", slots }));
+    expect(parse([{ state: "dancing" }]).ok).toBe(false);
+    expect(parse([{ state: "running", sessionId: "" }]).ok).toBe(false);
+    expect(parse([]).ok).toBe(true);
   });
 
   test("the event field is found among other fields", () => {
@@ -76,7 +86,7 @@ describe("SSE events", () => {
     expect(parseAndValidateJson(SseEvent, JSON.stringify({ slot: 1, type: "message", role: "explorer", text: "ls" })).ok).toBe(true);
   });
 
-  test("a slot status is an SSE event as it is", () => {
-    expect(parseAndValidateJson(SseEvent, JSON.stringify({ type: "slot", slot: 0, state: "idle" })).ok).toBe(true);
+  test("every slot's state is an SSE event as it is, without a slot tag", () => {
+    expect(parseAndValidateJson(SseEvent, JSON.stringify({ type: "slots", slots: [{ state: "idle" }] })).ok).toBe(true);
   });
 });

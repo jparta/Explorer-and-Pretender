@@ -1,10 +1,12 @@
 // The slot loops (architecture 6.1, 6.2): each slot is checked once a second, a *tick*,
 // and moves between idle, running, intermission and sleeping. The runner is the only
-// writer of slot state (D24 keeps it to one runner), so the state here is the truth and
-// Valkey's copy is for the web server and for the next runner after a restart. Doesn't
-// touch the network itself: Valkey, the Sessions and the clock are passed in.
-import { type Ending, type SlotState, utcDate } from "@exhibition/shared";
+// writer of slot state (D24 keeps it to one runner), so the state here is the truth.
+// Every change writes every slot's state to Valkey as one event (D65), for the web server
+// and for the next runner after a restart. Doesn't touch the network itself: Valkey, the
+// Sessions and the clock are passed in.
+import { type Ending, type SlotStateWithSession, utcDate } from "@exhibition/shared";
 import { errorFields, log as defaultLog, type Logger } from "./log.ts";
+import { SlotStatesWriter } from "./slot-states-writer.ts";
 import type { ValkeyStore } from "./store.ts";
 
 export type RunSession = (slot: number, sessionId: string, signal: AbortSignal) => Promise<Ending>;
@@ -15,6 +17,7 @@ export type SlotLoopsOptions = {
   intermissionMs: number;
   presenceTimeoutMs: number;
   dailySpendCapDollars: number;
+  slotStatesRetryPauseMs: number; // the pause before writing the slot states again after a failure
   nowMs: () => number; // since the epoch
   runSession: RunSession;
   newSessionId?: () => string;
@@ -51,6 +54,7 @@ export class SlotLoops {
   private readonly lastTickAtMsBySlot: number[];
   private readonly log: Logger;
   private readonly newSessionId: () => string;
+  private readonly slotStatesWriter: SlotStatesWriter;
   private stopping = false;
 
   constructor(private readonly options: SlotLoopsOptions) {
@@ -58,45 +62,40 @@ export class SlotLoops {
     this.lastTickAtMsBySlot = Array.from({ length: options.slotCount }, () => 0);
     this.log = options.log ?? defaultLog;
     this.newSessionId = options.newSessionId ?? (() => crypto.randomUUID());
+    this.slotStatesWriter = new SlotStatesWriter({
+      currentSlotStates: () => this.slotStatesForValkey(),
+      write: (slots) => options.store.writeSlotStates(slots),
+      retryPauseMs: options.slotStatesRetryPauseMs,
+      log: this.log,
+    });
   }
 
-  // On start-up: picks up the slot states a previous runner left (architecture 9).
+  // On start-up: picks up the slot states a previous runner left (architecture 9), and
+  // writes every slot's state, so the list has the current slot count (D65).
   async resumePreviousSlotStates(): Promise<void> {
     const { store, slotCount } = this.options;
-
-    // Slots beyond a lowered count: end their Sessions and remove them, so no reader
-    // sees them running forever. Then write the count for the web server (D58).
-    const previousCount = (await store.readSlotCount()) ?? 0;
-    for (let n = slotCount; n < previousCount; n++) {
-      const previousState = await store.readSlot(n);
+    const previousStates = (await store.readSlotStates()) ?? [];
+    for (let n = 0; n < Math.max(slotCount, previousStates.length); n++) {
+      const previousState = previousStates[n];
+      // Only a crash leaves a slot running: a clean shutdown moves it to its intermission.
+      // A slot beyond a lowered count gets its Session ended too, and drops out of the list.
       if (previousState?.state === "running" && previousState.sessionId) {
         await this.endIfUnended(n, previousState.sessionId);
       }
-      await store.deleteSlot(n);
-    }
-    await store.writeSlotCount(slotCount);
-
-    for (let n = 0; n < slotCount; n++) {
-      const previousState = await store.readSlot(n);
+      if (n >= slotCount) continue;
       switch (previousState?.state) {
         case "running":
-          // Only a crash leaves a slot running: a clean shutdown moves it to its intermission.
-          if (previousState.sessionId) await this.endIfUnended(n, previousState.sessionId);
-          await this.setSlotState(n, this.intermissionStartingNow(previousState.sessionId));
-          break;
         case "intermission":
-          this.slotStates[n] = this.intermissionStartingNow(previousState.sessionId);
+          void this.setSlotState(n, this.intermissionStartingNow(previousState.sessionId));
           break;
         case "sleeping":
-          this.slotStates[n] = { state: "sleeping" };
-          break;
-        case "idle":
-          this.slotStates[n] = { state: "idle" };
+          void this.setSlotState(n, { state: "sleeping" });
           break;
         default:
-          await this.setSlotState(n, { state: "idle" });
+          void this.setSlotState(n, { state: "idle" });
       }
     }
+    await this.whenSlotStatesWritten();
   }
 
   async tickAll(): Promise<void> {
@@ -125,12 +124,18 @@ export class SlotLoops {
     if (slot?.state === "running") await slot.endingHandled;
   }
 
+  // Resolves once Valkey has every slot's latest state.
+  whenSlotStatesWritten(): Promise<void> {
+    return this.slotStatesWriter.whenWritten();
+  }
+
   // Ends running Sessions as interrupted and starts their intermission (architecture 9).
   async shutdown(): Promise<void> {
     this.stopping = true;
     const running = this.slotStates.filter((slot): slot is Running => slot.state === "running");
     for (const slot of running) this.stop(slot, "shutdown");
     await Promise.all(running.map((slot) => slot.endingHandled));
+    await this.slotStatesWriter.whenWritten();
   }
 
   private async advanceSlot(n: number): Promise<void> {
@@ -139,7 +144,7 @@ export class SlotLoops {
     if (!slot) throw new Error(`No slot ${n}`);
     switch (slot.state) {
       case "idle":
-        if (await this.isMachineSleeping()) await this.setSlotState(n, { state: "sleeping" });
+        if (await this.isMachineSleeping()) void this.setSlotState(n, { state: "sleeping" });
         else if (await store.isWatched(n)) await this.startSession(n);
         return;
       case "running":
@@ -147,14 +152,14 @@ export class SlotLoops {
         return;
       case "intermission":
         if (slot.unrecordedEnding) await this.endSessionAndSetNextState(n, slot.unrecordedEnding);
-        else if (await this.isMachineSleeping()) await this.setSlotState(n, { state: "sleeping" });
+        else if (await this.isMachineSleeping()) void this.setSlotState(n, { state: "sleeping" });
         else if (nowMs() >= slot.intermissionEndsAtMs) {
           if (await store.isWatched(n)) await this.startSession(n);
-          else await this.setSlotState(n, { state: "idle" });
+          else void this.setSlotState(n, { state: "idle" });
         }
         return;
       case "sleeping":
-        if (!(await this.isMachineSleeping())) await this.setSlotState(n, { state: "idle" });
+        if (!(await this.isMachineSleeping())) void this.setSlotState(n, { state: "idle" });
         return;
     }
   }
@@ -194,17 +199,11 @@ export class SlotLoops {
     const { store, nowMs, runSession } = this.options;
     const sessionId = this.newSessionId();
     await store.writeEvent(sessionId, { type: "session-start", sessionId, slot: n, kind: "terminal" });
-    try {
-      await store.setSlot({ type: "slot", slot: n, state: "running", sessionId });
-    } catch (error) {
-      // Nobody was told about this Session: end its stream so it doesn't stay behind.
-      await store.endSession(sessionId, "interrupted").catch(() => {});
-      throw error;
-    }
-
     const abortController = new AbortController();
     const running: Running = { state: "running", sessionId, abortController, presenceConfirmedAtMs: nowMs(), endingHandled: Promise.resolve() };
-    this.slotStates[n] = running;
+    // Waits until Valkey shows the slot running, however long that takes, so the Session
+    // only starts once everyone can know about it.
+    await this.setSlotState(n, running);
     this.log.info("Session started", { slot: n, sessionId });
     running.endingHandled = runSession(n, sessionId, abortController.signal)
       .catch((error): Ending => {
@@ -233,11 +232,11 @@ export class SlotLoops {
         await store.endSession(endedSession.sessionId, endedSession.ending);
       }
       if (endedSession.ending === "sleeping") await store.setSleeping(utcDate(new Date(nowMs())));
-      if (endedSession.stopReason === "absent") await this.setSlotState(n, { state: "idle" });
-      else if (endedSession.stopReason !== "shutdown" && (await this.isMachineSleeping())) await this.setSlotState(n, { state: "sleeping" });
-      else await this.setSlotState(n, this.intermissionStartingNow(endedSession.sessionId));
+      if (endedSession.stopReason === "absent") void this.setSlotState(n, { state: "idle" });
+      else if (endedSession.stopReason !== "shutdown" && (await this.isMachineSleeping())) void this.setSlotState(n, { state: "sleeping" });
+      else void this.setSlotState(n, this.intermissionStartingNow(endedSession.sessionId));
     } catch (error) {
-      this.slotStates[n] = { ...this.intermissionStartingNow(endedSession.sessionId), unrecordedEnding: endedSession };
+      void this.setSlotState(n, { ...this.intermissionStartingNow(endedSession.sessionId), unrecordedEnding: endedSession });
       this.log.error("recording the ending failed", { slot: n, sessionId: endedSession.sessionId, ...errorFields(error) });
     }
   }
@@ -259,12 +258,22 @@ export class SlotLoops {
     };
   }
 
-  // Sets slot n's state, here and in Valkey.
-  private async setSlotState(n: number, nextState: Exclude<Slot, Running>): Promise<void> {
-    const state: SlotState = nextState.state;
-    const sessionId = nextState.state === "intermission" ? nextState.sessionId : undefined;
-    await this.options.store.setSlot({ type: "slot", slot: n, state, ...(sessionId ? { sessionId } : {}) });
+  // Every change of a slot's state goes through here: it sets the state in memory, logs
+  // it, and has every slot's state written to Valkey. Resolves once Valkey has it; starting a
+  // Session waits for that (start-up and shutdown wait for the writer too). Other changes
+  // don't, so a write that keeps failing
+  // doesn't hold up stopping a Session nobody watches, or recording an ending.
+  private setSlotState(n: number, nextState: Slot): Promise<void> {
     this.slotStates[n] = nextState;
-    this.log.info(`slot ${state}`, { slot: n, ...(sessionId ? { sessionId } : {}) });
+    const sessionId = nextState.state === "running" || nextState.state === "intermission" ? nextState.sessionId : undefined;
+    this.log.info(`slot ${nextState.state}`, { slot: n, ...(sessionId ? { sessionId } : {}) });
+    return this.slotStatesWriter.writeChange();
+  }
+
+  private slotStatesForValkey(): SlotStateWithSession[] {
+    return this.slotStates.map((slot) => {
+      const sessionId = slot.state === "running" || slot.state === "intermission" ? slot.sessionId : undefined;
+      return { state: slot.state, ...(sessionId ? { sessionId } : {}) };
+    });
   }
 }

@@ -1,6 +1,6 @@
 # Runner
 
-The runner runs the Sessions ([architecture §1](../architecture.md#1-overview)): it decides when each slot starts one, has the Explorer and the Pretender take turns through the model provider, paces their messages, and writes every event and slot state to Valkey. It is the only writer of Sessions and slot state. One pod runs every slot (D24); how many there are is the runner's setting (D58).
+The runner runs the Sessions ([architecture §1](../architecture.md#1-overview)): it decides when each slot starts one, has the Explorer and the Pretender take turns through the model provider, paces their messages, and writes every event and slot state to Valkey. It is the only writer of Sessions and slot state. One pod runs every slot (D24); how many there are is the runner's setting (D65).
 
 What a Session does, step by step, is in the architecture ([§6](../architecture.md#6-a-sessions-life), [§7](../architecture.md#7-pacing), [§8](../architecture.md#8-spend-and-sleeping)). This doc covers how the runner is built and run. Terms such as *Codeword*, *present* and *watching* are as the [glossary](../../glossary.md) defines them.
 
@@ -39,15 +39,15 @@ If writing the ending fails, the slot waits in its intermission and later ticks 
 
 **Start-up:**
 
-1. **Waits for Valkey.** Until Valkey answers, commands wait in the client's offline queue (§2.5), so start-up sends `PING` and gives it a few seconds; while there's no answer, it logs that it's waiting and tries again. If a later step fails, for example because Valkey went away again, it waits a few seconds and starts over from here.
-2. **Slots beyond a lowered count.** It reads the slot count the previous runner wrote. For each slot that's no longer counted, it ends a Session left running as interrupted and removes the slot's hash; otherwise a reader would see that slot running forever. Then it writes the new count (D58).
+1. **Waits for Valkey.** Until Valkey answers, commands wait in the client's offline queue (§2.5), so start-up sends `PING` and gives it a few seconds; while there's no answer, it logs that it's waiting and tries again. If reading the previous states or ending a previous Session fails, for example because Valkey went away again, it waits a few seconds and starts over from here. Writing the new slot states isn't a step that fails: the writer tries again until it succeeds (§2.4), and start-up waits for it.
+2. **Reads the previous slot states,** the last entry of the `slots` stream. For a slot beyond a lowered count, it ends a Session left running as interrupted, as in step 3, so its stream doesn't stay open forever; the slot itself just drops out of the list.
 3. **Each slot's previous state:**
    - `running`: only a crash leaves a slot running, since a clean shutdown moves it to its intermission. Unless the stream already ends with `session-end` (a runner can die between writing it and moving the slot on), the runner ends the Session as interrupted, then starts the slot's intermission.
    - `intermission`: starts a fresh intermission.
    - `sleeping` or `idle`: kept as it is.
    - Nothing at all: set to idle.
 
-**Shutdown:** on SIGTERM, the runner stops every running Session, waits until each ending is written ([architecture §9](../architecture.md#9-when-things-fail)), and exits, normally well under a second. While Valkey is down, those writes wait in the offline queue, so shutdown waits until Kubernetes kills the pod after its 30-second grace period; the next runner's start-up then ends those Sessions. A 30-second shutdown is therefore expected during a Valkey outage, not a bug.
+**Shutdown:** on SIGTERM, the runner stops every running Session, waits until each ending and the last slot states are written ([architecture §9](../architecture.md#9-when-things-fail)), and exits, normally well under a second. While Valkey is down, those writes wait in the offline queue, and a slot-state write that keeps failing keeps being tried (§2.4), so shutdown waits until Kubernetes kills the pod after its 30-second grace period; the next runner's start-up then ends those Sessions. A 30-second shutdown is therefore expected during a Valkey outage, not a bug.
 
 ### 2.2 A Session's conversation
 
@@ -76,7 +76,11 @@ As in [architecture §6.2](../architecture.md#62-one-session-step-by-step):
 
 Every command is in `store.ts`. The runner's Valkey user allows exactly the commands it uses ([Valkey component doc §6](valkey.md#6-users-and-permissions)), and the tests log in as that user, so a missing permission fails them.
 
-- **Slot state** is written with one `HSET` and announced on the `slots` stream. A state without a Session writes an empty `sessionId`, which means no Session ([architecture §3](../architecture.md#3-valkey-contract)). One command, so no reader ever sees an old Session ID next to a new state.
+- **Slot states:** every change leads to a write of every slot's state, from memory, as one entry on the `slots` stream (D65, [architecture §4.2](../architecture.md#42-slot-state)). Memory changes first, then a single writer (`slot-states-writer.ts`) writes the states as they are when its write starts. Only one write is ever under way, so writes can't land out of order:
+  - **Changes during a write** go out together in the next write, so when two slots change at once, the last entry has both.
+  - **A failed write** is logged and tried again after a pause, for as long as it takes; the writer never gives up on a change.
+  - **Starting a Session waits** until Valkey shows the slot running, and the conversation starts after that, so nobody can be told about a Session that then doesn't happen. While Valkey refuses, that slot's loop waits too; after 10 s liveness fails, and about 40 s in the runner is restarted, as in any Valkey outage (§2.5). Start-up and shutdown wait for their writes too. Other changes don't, so a write that keeps failing doesn't hold up stopping a Session nobody watches, or recording an ending.
+  - **Shutdown** waits until the last states are written.
 - **Stream lengths** are capped with `MAXLEN ~`, which lets Valkey trim in whole blocks, cheaper than trimming exactly. The limits are only a safety net.
 - **Unreadable data:** a stream entry or slot state that doesn't match its schema reads as nothing, with a warning in the log, so a schema mismatch or corrupted data shows up instead of being skipped silently.
 
@@ -123,7 +127,7 @@ sequenceDiagram
 
 ## 3. Logs
 
-One JSON object per line on stdout (D47), with `slot` and `sessionId` where they apply. What gets logged: start-up, each slot state change, each Session start, Codeword and ending, each call's cost with the day's total, failed calls with their HTTP status, cut-off messages, unreadable data, and errors. Errors caught at the top level (a failed start-up, a failed tick, a failed Session, an ending that couldn't be written) are logged with their stack, so a failure can be traced from the logs alone. The start-up wait for Valkey is the exception: it repeats every few seconds while Valkey is away, so it logs only a short message, without a stack.
+One JSON object per line on stdout (D47), with `slot` and `sessionId` where they apply. What gets logged: start-up, each slot state change, each Session start, Codeword and ending, each call's cost with the day's total, failed calls with their HTTP status, cut-off messages, unreadable data, and errors. Errors caught at the top level (a failed start-up, a failed tick, a failed Session, an ending that couldn't be written, a failed write of the slot states) are logged with their stack, so a failure can be traced from the logs alone. The start-up wait for Valkey is the exception: it repeats every few seconds while Valkey is away, so it logs only a short message, without a stack.
 
 Each Session's Codeword is logged when it's chosen, which helps when checking why a Session did or didn't end as *found*. Message text isn't logged: messages can be long and come every few seconds, so they would swamp the log, and while a Session lasts its stream holds them anyway.
 
@@ -139,7 +143,7 @@ The runner has no readiness probe, since nothing sends it traffic (D29).
 
 | Setting | Environment variable | |
 |---|---|---|
-| Slot count | `SLOT_COUNT` | D58 |
+| Slot count | `SLOT_COUNT` | D65 |
 | Exchange cap | `EXCHANGE_CAP` | S2.4 |
 | Intermission, in seconds | `INTERMISSION_SECONDS` | S2.8 |
 | Daily spend cap, in dollars | `DAILY_SPEND_CAP_DOLLARS` | S6.1 |
@@ -227,7 +231,7 @@ The fake provider runs inside the test process, on this machine, outside the clu
 - Scaling Valkey to 0 for 50 s: the liveness probe fails, Kubernetes restarts the runner, and it starts once Valkey is back.
 - The NetworkPolicy, from inside the runner's pod: `openrouter.ai:443` and `valkey:6379` connect. The Kubernetes API (`10.43.0.1:443`) and a private address are refused, and so is `openrouter.ai:80`, since only port 443 is open. From a throwaway pod, connecting to the runner's health port is refused. The liveness probe keeps passing.
 - Missing models and an empty API key file each stop the runner at start-up with an error naming them, never the key's value. In development the pod then stays running with the error in its log (§6.4).
-- Lowering `SLOT_COUNT` from 3 to 2 removes `slot:2` and rewrites `slot-count`; raising it back recreates the slot as idle.
+- Lowering `SLOT_COUNT` from 3 to 2 removed `slot:2` and rewrote `slot-count`; raising it back recreated the slot as idle. Checked before D65; since then the slot loop tests cover it (a shorter list, then a new idle slot), and it's still to recheck in the cluster.
 - Starting the runner while Valkey is down: it logs that it's waiting every 5 s, and starts as soon as Valkey answers.
 - The NetworkPolicy's reserved ranges: a link-local address (`169.254.169.254`, where cloud metadata services answer) and a carrier-grade NAT address are refused too.
 

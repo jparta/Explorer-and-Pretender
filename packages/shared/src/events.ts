@@ -43,21 +43,26 @@ export type MessageEvent = Extract<SessionEvent, { type: "message" }>;
 export const SlotState = z.enum(["idle", "running", "intermission", "sleeping"]);
 export type SlotState = z.infer<typeof SlotState>;
 
-export const SlotStateEvent = z.object({
-  type: z.literal("slot"),
-  slot: slotNumber,
+// One slot's state, with its Session while it's running and during the intermission.
+export const SlotStateWithSession = z.object({
   state: SlotState,
-  // Set while running and during the intermission. In the slot:{n} hash, an empty
-  // sessionId means no Session; readers drop it before checking (shared component doc, section 3).
   sessionId: z.string().min(1).optional(),
 });
-export type SlotStateEvent = z.infer<typeof SlotStateEvent>;
+export type SlotStateWithSession = z.infer<typeof SlotStateWithSession>;
 
-// What the browser receives over SSE: either kind of event, tagged with its slot.
-// A session-start then carries its slot twice, both the same (D55).
+// Every slot's state, written whenever one changes (D65). A slot's position in the list
+// is its number, and the list's length is the slot count.
+export const SlotStatesEvent = z.object({
+  type: z.literal("slots"),
+  slots: z.array(SlotStateWithSession),
+});
+export type SlotStatesEvent = z.infer<typeof SlotStatesEvent>;
+
+// What the browser receives over SSE: a Session event tagged with its slot, or every
+// slot's state. A session-start then carries its slot twice, both the same (D55).
 export const SseEvent = z.union([
   SessionEvent.and(z.object({ slot: slotNumber })),
-  SlotStateEvent,
+  SlotStatesEvent,
 ]);
 export type SseEvent = z.infer<typeof SseEvent>;
 
@@ -69,7 +74,7 @@ export const EVENT_FIELD = "event";
 export type Decoded<T> = { ok: true; value: T } | { ok: false; error: string };
 
 // The field-value pairs for XADD: ["event", "<json>"].
-export function toStreamFields(event: SessionEvent | SlotStateEvent): [string, string] {
+export function toStreamFields(event: SessionEvent | SlotStatesEvent): [string, string] {
   return [EVENT_FIELD, JSON.stringify(event)];
 }
 

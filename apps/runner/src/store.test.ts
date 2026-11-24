@@ -7,9 +7,7 @@ import {
   PRESENCE_KEY,
   SESSION_EXPIRE_SECONDS,
   sessionKey,
-  SLOT_COUNT_KEY,
   SLOT_STATES_KEY,
-  slotKey,
   spendKey,
   sleepingKey,
   watchingKey,
@@ -17,7 +15,7 @@ import {
 import { startValkey, type TestValkey } from "@exhibition/shared/testing";
 import type { Logger } from "./log.ts";
 import { connectValkey, ValkeyStore } from "./store.ts";
-import { readHash, readStreamEvents } from "./valkey-test-helpers.ts";
+import { readStreamEvents } from "./valkey-test-helpers.ts";
 
 let valkey: TestValkey;
 let client: RedisClient;
@@ -78,46 +76,25 @@ describe("Session streams", () => {
   });
 });
 
-describe("slot state", () => {
-  test("is written to slot:{n} and announced on the slots stream", async () => {
-    await store.setSlot({ type: "slot", slot: 1, state: "running", sessionId: "s1" });
-    expect(await readHash(valkey.adminClient, slotKey(1))).toEqual({ state: "running", sessionId: "s1" });
+describe("every slot's state (D65)", () => {
+  test("is written as one event on the slots stream, and the last one is read back", async () => {
+    await store.writeSlotStates([{ state: "idle" }, { state: "running", sessionId: "s1" }]);
+    await store.writeSlotStates([{ state: "idle" }, { state: "intermission", sessionId: "s1" }]);
     expect(await readStreamEvents(valkey.adminClient, SLOT_STATES_KEY)).toEqual([
-      { type: "slot", slot: 1, state: "running", sessionId: "s1" },
+      { type: "slots", slots: [{ state: "idle" }, { state: "running", sessionId: "s1" }] },
+      { type: "slots", slots: [{ state: "idle" }, { state: "intermission", sessionId: "s1" }] },
     ]);
-    expect(await store.readSlot(1)).toEqual({ type: "slot", slot: 1, state: "running", sessionId: "s1" });
+    expect(await store.readSlotStates()).toEqual([{ state: "idle" }, { state: "intermission", sessionId: "s1" }]);
   });
 
-  test("a state without a Session empties the Session ID in the same write", async () => {
-    await store.setSlot({ type: "slot", slot: 0, state: "intermission", sessionId: "s1" });
-    await store.setSlot({ type: "slot", slot: 0, state: "idle" });
-    expect(await readHash(valkey.adminClient, slotKey(0))).toEqual({ state: "idle", sessionId: "" });
-    expect(await store.readSlot(0)).toEqual({ type: "slot", slot: 0, state: "idle" });
+  test("nothing written yet reads as nothing", async () => {
+    expect(await store.readSlotStates()).toBeUndefined();
   });
 
-  test("a slot never written reads as nothing", async () => {
-    expect(await store.readSlot(2)).toBeUndefined();
-  });
-
-  test("a slot with an unknown state reads as nothing, with a warning", async () => {
-    await valkey.adminClient.send("HSET", [slotKey(2), "state", "dancing"]);
-    expect(await store.readSlot(2)).toBeUndefined();
+  test("a last entry that can't be read counts as nothing, with a warning", async () => {
+    await valkey.adminClient.send("XADD", [SLOT_STATES_KEY, "*", "event", '{"type":"slots","slots":[{"state":"dancing"}]}']);
+    expect(await store.readSlotStates()).toBeUndefined();
     expect(warnings).toHaveLength(1);
-  });
-
-  test("a slot's hash can be deleted", async () => {
-    await store.setSlot({ type: "slot", slot: 4, state: "idle" });
-    await store.deleteSlot(4);
-    expect(await valkey.adminClient.send("EXISTS", [slotKey(4)])).toBe(0);
-  });
-});
-
-describe("slot count (D58)", () => {
-  test("is written for the web server, and read back", async () => {
-    expect(await store.readSlotCount()).toBeUndefined();
-    await store.writeSlotCount(3);
-    expect(await valkey.adminClient.send("GET", [SLOT_COUNT_KEY])).toBe("3");
-    expect(await store.readSlotCount()).toBe(3);
   });
 });
 

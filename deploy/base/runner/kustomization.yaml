@@ -9,7 +9,7 @@ resources:
 configMapGenerator:
   - name: runner-config
     literals:
-      - SLOT_COUNT=3  # the runner owns the slot count and tells the web server through Valkey (D58)
+      - SLOT_COUNT=3  # the runner owns the slot count; the web server learns it from the slots stream (D65)
       - EXCHANGE_CAP=15
       - INTERMISSION_SECONDS=10
       - DAILY_SPEND_CAP_DOLLARS=2

@@ -6,11 +6,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import type { RedisClient } from "bun";
 import {
   type Ending,
+  SLOT_STATES_KEY,
+  type SlotStatesEvent,
   PRESENCE_KEY,
   sessionKey,
-  SLOT_COUNT_KEY,
   sleepingKey,
-  slotKey,
   spendKey,
   utcDate,
   watchingKey,
@@ -19,7 +19,7 @@ import { startValkey, type TestValkey } from "@exhibition/shared/testing";
 import type { Logger } from "./log.ts";
 import { SlotLoops } from "./slots.ts";
 import { connectValkey, ValkeyStore } from "./store.ts";
-import { readHash, readStreamEvents } from "./valkey-test-helpers.ts";
+import { readStreamEvents } from "./valkey-test-helpers.ts";
 
 // Every time and amount in these tests derives from these.
 const START_MS = Date.parse("2026-11-17T12:00:00Z");
@@ -29,6 +29,7 @@ const SPEND_CAP_DOLLARS = 2;
 const INTERMISSION_MS = 10_000;
 const PRESENCE_TIMEOUT_MS = 30_000;
 const SLOT_COUNT = 3;
+const SLOT_STATES_RETRY_PAUSE_MS = 10;
 
 let valkey: TestValkey;
 let client: RedisClient;
@@ -67,6 +68,7 @@ beforeEach(async () => {
     intermissionMs: INTERMISSION_MS,
     presenceTimeoutMs: PRESENCE_TIMEOUT_MS,
     dailySpendCapDollars: SPEND_CAP_DOLLARS,
+    slotStatesRetryPauseMs: SLOT_STATES_RETRY_PAUSE_MS,
     nowMs: () => clockMs,
     newSessionId: () => `s${++sessionsCreated}`,
     log,
@@ -86,7 +88,13 @@ const setWatching = (slot: number) => adminClient().send("SET", [watchingKey(slo
 const clearWatching = (slot: number) => adminClient().send("DEL", [watchingKey(slot)]);
 const setSpend = (dollars: number) => adminClient().send("SET", [spendKey(TODAY), String(dollars)]);
 
-const slotHash = (slot: number) => readHash(adminClient(), slotKey(slot));
+// Every slot's state in the slots stream, once the runner has written its latest
+// changes, and one slot's from it.
+const currentSlotStates = async () => {
+  await slots.whenSlotStatesWritten();
+  return ((await readStreamEvents(adminClient(), SLOT_STATES_KEY)).at(-1) as SlotStatesEvent | undefined)?.slots;
+};
+const slotState = async (slot: number) => (await currentSlotStates())?.[slot];
 const streamEvents = (sessionId: string) => readStreamEvents(adminClient(), sessionKey(sessionId));
 // Ends the fake Session started as number sessionIndex (from 0) and waits until the runner has recorded the ending.
 const endFakeSession = async (sessionIndex: number, ending: Ending) => {
@@ -98,9 +106,78 @@ const endFakeSession = async (sessionIndex: number, ending: Ending) => {
 describe("starting", () => {
   beforeEach(() => slots.resumePreviousSlotStates());
 
-  test("on start-up, slots that were never used are set to idle, and the slot count is written (D58)", async () => {
-    for (let slot = 0; slot < SLOT_COUNT; slot++) expect(await slotHash(slot)).toEqual({ state: "idle", sessionId: "" });
-    expect(await adminClient().send("GET", [SLOT_COUNT_KEY])).toBe(String(SLOT_COUNT));
+  test("on start-up, every slot's state is written, and slots that were never used are idle (D65)", async () => {
+    expect(await currentSlotStates()).toEqual([{ state: "idle" }, { state: "idle" }, { state: "idle" }]);
+  });
+
+  test("two slots changing in the same tick both show in the last entry", async () => {
+    await setPresent();
+    await setWatching(0);
+    await setWatching(2);
+    await slots.tickAll();
+    expect(await currentSlotStates()).toEqual([
+      { state: "running", sessionId: "s1" },
+      { state: "idle" },
+      { state: "running", sessionId: "s2" },
+    ]);
+  });
+
+  test("only one write of the slot states is under way at a time, and the last one has every change", async () => {
+    const writeSlotStates = store.writeSlotStates.bind(store);
+    let writesUnderWay = 0;
+    let mostWritesUnderWay = 0;
+    store.writeSlotStates = async (states) => {
+      mostWritesUnderWay = Math.max(mostWritesUnderWay, ++writesUnderWay);
+      await Bun.sleep(5);
+      await writeSlotStates(states);
+      writesUnderWay--;
+    };
+    await setPresent();
+    await Promise.all([setWatching(0), setWatching(1), setWatching(2)]);
+    await slots.tickAll();
+    expect(mostWritesUnderWay).toBe(1);
+    expect(await currentSlotStates()).toEqual([
+      { state: "running", sessionId: "s1" },
+      { state: "running", sessionId: "s2" },
+      { state: "running", sessionId: "s3" },
+    ]);
+  });
+
+  test("a write that failed is tried again after a pause, without waiting for a change", async () => {
+    const writeSlotStates = store.writeSlotStates.bind(store);
+    let failuresLeft = 1;
+    store.writeSlotStates = async (states) => {
+      if (failuresLeft-- > 0) throw new Error("Connection closed");
+      return writeSlotStates(states);
+    };
+    await setSpend(SPEND_CAP_DOLLARS);
+    await slots.tick(0);
+    await slots.whenSlotStatesWritten();
+    expect(await slotState(0)).toEqual({ state: "sleeping" });
+  });
+
+  test("a start whose write fails is written on the retry, and only then does its Session start", async () => {
+    // The first write waits until the test fails it; the ones after it go through.
+    const writeSlotStates = store.writeSlotStates.bind(store);
+    let failFirstWrite = () => {};
+    let writesStarted = 0;
+    store.writeSlotStates = (states) => {
+      if (++writesStarted > 1) return writeSlotStates(states);
+      return new Promise((_, reject) => {
+        failFirstWrite = () => reject(new Error("Connection closed"));
+      });
+    };
+    await setPresent();
+    await setWatching(0);
+    const slot0Tick = slots.tick(0);
+    while (writesStarted < 1) await Bun.sleep(1);
+    await Bun.sleep(20);
+    expect(sessions).toHaveLength(0); // not before the slot shows as running
+    failFirstWrite();
+    await slot0Tick;
+    expect(sessions.map((s) => s.sessionId)).toEqual(["s1"]);
+    expect(await slotState(0)).toEqual({ state: "running", sessionId: "s1" });
+    expect(await streamEvents("s1")).toEqual([{ type: "session-start", sessionId: "s1", slot: 0, kind: "terminal" }]);
   });
 
   test("an idle slot that someone watches starts a Session; the others stay idle (S2.6)", async () => {
@@ -108,27 +185,9 @@ describe("starting", () => {
     await setWatching(1);
     await slots.tickAll();
     expect(sessions.map((s) => [s.slot, s.sessionId])).toEqual([[1, "s1"]]);
-    expect(await slotHash(1)).toEqual({ state: "running", sessionId: "s1" });
-    expect(await slotHash(0)).toEqual({ state: "idle", sessionId: "" });
+    expect(await slotState(1)).toEqual({ state: "running", sessionId: "s1" });
+    expect(await slotState(0)).toEqual({ state: "idle" });
     expect(await streamEvents("s1")).toEqual([{ type: "session-start", sessionId: "s1", slot: 1, kind: "terminal" }]);
-  });
-
-  test("if the slot can't be set to running, the new stream is ended and expires, rather than left behind", async () => {
-    const setSlot = store.setSlot.bind(store);
-    let failuresLeft = 1;
-    store.setSlot = async (status) => {
-      if (status.state === "running" && failuresLeft-- > 0) throw new Error("Connection closed");
-      return setSlot(status);
-    };
-    await setPresent();
-    await setWatching(0);
-    await slots.tick(0);
-    expect(await streamEvents("s1")).toEqual([
-      { type: "session-start", sessionId: "s1", slot: 0, kind: "terminal" },
-      { type: "session-end", ending: "interrupted" },
-    ]);
-    expect(Number(await adminClient().send("TTL", [sessionKey("s1")]))).toBeGreaterThan(0);
-    expect(sessions).toHaveLength(0);
   });
 
   test("a running slot doesn't start a second Session", async () => {
@@ -152,7 +211,7 @@ describe("ending", () => {
   test("a Session's ending is written, then the intermission starts (S2.8)", async () => {
     await endFakeSession(0, "found");
     expect((await streamEvents("s1")).at(-1)).toEqual({ type: "session-end", ending: "found" });
-    expect(await slotHash(0)).toEqual({ state: "intermission", sessionId: "s1" });
+    expect(await slotState(0)).toEqual({ state: "intermission", sessionId: "s1" });
   });
 
   test("after the intermission, an unwatched slot goes idle", async () => {
@@ -160,17 +219,17 @@ describe("ending", () => {
     await clearWatching(0);
     clockMs += INTERMISSION_MS - 1;
     await slots.tickAll();
-    expect((await slotHash(0)).state).toBe("intermission");
+    expect((await slotState(0))?.state).toBe("intermission");
     clockMs += 1;
     await slots.tickAll();
-    expect(await slotHash(0)).toEqual({ state: "idle", sessionId: "" });
+    expect(await slotState(0)).toEqual({ state: "idle" });
   });
 
   test("after the intermission, a watched slot starts the next Session", async () => {
     await endFakeSession(0, "ran-its-course");
     clockMs += INTERMISSION_MS;
     await slots.tickAll();
-    expect(await slotHash(0)).toEqual({ state: "running", sessionId: "s2" });
+    expect(await slotState(0)).toEqual({ state: "running", sessionId: "s2" });
   });
 
   test("nobody present: the Session ends as interrupted and the slot goes idle (S2.7)", async () => {
@@ -179,7 +238,20 @@ describe("ending", () => {
     await slots.whenSessionEnded(0);
     expect(sessions[0]!.signal.aborted).toBe(true);
     expect((await streamEvents("s1")).at(-1)).toEqual({ type: "session-end", ending: "interrupted" });
-    expect(await slotHash(0)).toEqual({ state: "idle", sessionId: "" });
+    expect(await slotState(0)).toEqual({ state: "idle" });
+  });
+
+  test("nobody present stops the Session even while the slot states can't be written", async () => {
+    store.writeSlotStates = async () => {
+      throw new Error("NOPERM");
+    };
+    await setSpend(SPEND_CAP_DOLLARS);
+    await slots.tick(1); // slot 1 goes to sleep, and that change can't be written
+    await clearPresent();
+    await slots.tick(0);
+    expect(sessions[0]!.signal.aborted).toBe(true);
+    store.writeSlotStates = ValkeyStore.prototype.writeSlotStates;
+    await slots.whenSlotStatesWritten();
   });
 
   test("someone present, watching another slot: the Session continues (S2.7)", async () => {
@@ -206,7 +278,7 @@ describe("ending", () => {
     sessions[0]!.fail(new Error("Connection closed"));
     await slots.whenSessionEnded(0);
     expect((await streamEvents("s1")).at(-1)).toEqual({ type: "session-end", ending: "interrupted" });
-    expect(await slotHash(0)).toEqual({ state: "intermission", sessionId: "s1" });
+    expect(await slotState(0)).toEqual({ state: "intermission", sessionId: "s1" });
     expect(errors[0]!.fields).toMatchObject({ error: "Connection closed", stack: expect.stringContaining("Error") });
   });
 
@@ -222,7 +294,7 @@ describe("ending", () => {
     await slots.tick(0);
     expect((await streamEvents("s1")).at(-1)).toEqual({ type: "session-end", ending: "found" });
     expect(Number(await adminClient().send("TTL", [sessionKey("s1")]))).toBeGreaterThan(0);
-    expect(await slotHash(0)).toEqual({ state: "intermission", sessionId: "s1" });
+    expect(await slotState(0)).toEqual({ state: "intermission", sessionId: "s1" });
   });
 
   test("an ending whose expiry couldn't be set gets it on the retry, though session-end is already there", async () => {
@@ -242,7 +314,7 @@ describe("ending", () => {
   test("shutting down ends running Sessions as interrupted and starts their intermission (architecture 9)", async () => {
     await slots.shutdown();
     expect((await streamEvents("s1")).at(-1)).toEqual({ type: "session-end", ending: "interrupted" });
-    expect(await slotHash(0)).toEqual({ state: "intermission", sessionId: "s1" });
+    expect(await slotState(0)).toEqual({ state: "intermission", sessionId: "s1" });
   });
 });
 
@@ -263,7 +335,7 @@ describe("spend cap and sleeping (S6.2)", () => {
     await setWatching(0);
     await slots.tickAll();
     expect(sessions).toHaveLength(0);
-    for (let slot = 0; slot < SLOT_COUNT; slot++) expect(await slotHash(slot)).toEqual({ state: "sleeping", sessionId: "" });
+    for (let slot = 0; slot < SLOT_COUNT; slot++) expect(await slotState(slot)).toEqual({ state: "sleeping" });
   });
 
   test("a Session running when the cap is reached finishes, then its slot sleeps without an intermission", async () => {
@@ -274,7 +346,7 @@ describe("spend cap and sleeping (S6.2)", () => {
     await slots.tickAll();
     expect(sessions[0]!.signal.aborted).toBe(false);
     await endFakeSession(0, "ran-its-course");
-    expect(await slotHash(0)).toEqual({ state: "sleeping", sessionId: "" });
+    expect(await slotState(0)).toEqual({ state: "sleeping" });
   });
 
   test("a Session ending as sleeping, as when the key's limit is reached, marks the day, and every slot sleeps", async () => {
@@ -285,60 +357,63 @@ describe("spend cap and sleeping (S6.2)", () => {
     expect((await streamEvents("s1")).at(-1)).toEqual({ type: "session-end", ending: "sleeping" });
     expect(await adminClient().send("EXISTS", [sleepingKey(TODAY)])).toBe(1);
     await slots.tickAll();
-    for (let slot = 0; slot < SLOT_COUNT; slot++) expect((await slotHash(slot)).state).toBe("sleeping");
+    for (let slot = 0; slot < SLOT_COUNT; slot++) expect((await slotState(slot))?.state).toBe("sleeping");
   });
 
   test("at midnight UTC, sleeping slots wake up idle", async () => {
     await adminClient().send("SET", [sleepingKey(TODAY), "1"]);
     await slots.tickAll();
-    expect((await slotHash(0)).state).toBe("sleeping");
+    expect((await slotState(0))?.state).toBe("sleeping");
     clockMs = NEXT_MIDNIGHT_MS - 1;
     await slots.tickAll();
-    expect((await slotHash(0)).state).toBe("sleeping");
+    expect((await slotState(0))?.state).toBe("sleeping");
     clockMs = NEXT_MIDNIGHT_MS;
     await slots.tickAll();
-    for (let slot = 0; slot < SLOT_COUNT; slot++) expect(await slotHash(slot)).toEqual({ state: "idle", sessionId: "" });
+    for (let slot = 0; slot < SLOT_COUNT; slot++) expect(await slotState(slot)).toEqual({ state: "idle" });
   });
 });
 
 describe("start-up after a crash (architecture 9)", () => {
   test("a Session left running is ended as interrupted, and its slot starts an intermission", async () => {
     await store.writeEvent("old", { type: "session-start", sessionId: "old", slot: 2, kind: "terminal" });
-    await store.setSlot({ type: "slot", slot: 2, state: "running", sessionId: "old" });
+    await store.writeSlotStates([{ state: "idle" }, { state: "idle" }, { state: "running", sessionId: "old" }]);
     await slots.resumePreviousSlotStates();
     expect((await streamEvents("old")).at(-1)).toEqual({ type: "session-end", ending: "interrupted" });
-    expect(await slotHash(2)).toEqual({ state: "intermission", sessionId: "old" });
+    expect(await slotState(2)).toEqual({ state: "intermission", sessionId: "old" });
   });
 
   test("a runner that died between writing session-end and moving the slot on: the Session isn't ended twice", async () => {
     await store.writeEvent("old", { type: "session-start", sessionId: "old", slot: 2, kind: "terminal" });
     await store.endSession("old", "found");
-    await store.setSlot({ type: "slot", slot: 2, state: "running", sessionId: "old" });
+    await store.writeSlotStates([{ state: "idle" }, { state: "idle" }, { state: "running", sessionId: "old" }]);
     await slots.resumePreviousSlotStates();
     expect(await streamEvents("old")).toEqual([
       { type: "session-start", sessionId: "old", slot: 2, kind: "terminal" },
       { type: "session-end", ending: "found" },
     ]);
-    expect(await slotHash(2)).toEqual({ state: "intermission", sessionId: "old" });
+    expect(await slotState(2)).toEqual({ state: "intermission", sessionId: "old" });
   });
 
   test("a slot in its intermission or asleep keeps its state", async () => {
-    await store.setSlot({ type: "slot", slot: 0, state: "intermission", sessionId: "old" });
-    await store.setSlot({ type: "slot", slot: 1, state: "sleeping" });
+    await store.writeSlotStates([{ state: "intermission", sessionId: "old" }, { state: "sleeping" }, { state: "idle" }]);
     await slots.resumePreviousSlotStates();
-    expect(await slotHash(0)).toEqual({ state: "intermission", sessionId: "old" });
-    expect(await slotHash(1)).toEqual({ state: "sleeping", sessionId: "" });
+    expect(await slotState(0)).toEqual({ state: "intermission", sessionId: "old" });
+    expect(await slotState(1)).toEqual({ state: "sleeping" });
   });
 
-  test("after the slot count was lowered, slots beyond it end their Sessions and are removed", async () => {
-    await adminClient().send("SET", [SLOT_COUNT_KEY, "5"]);
+  test("after the slot count was lowered, Sessions in slots beyond it are ended, and the list is shorter", async () => {
     await store.writeEvent("old", { type: "session-start", sessionId: "old", slot: 3, kind: "terminal" });
-    await store.setSlot({ type: "slot", slot: 3, state: "running", sessionId: "old" });
-    await store.setSlot({ type: "slot", slot: 4, state: "idle" });
+    const idle = { state: "idle" } as const;
+    await store.writeSlotStates([idle, idle, idle, { state: "running", sessionId: "old" }, idle]);
     await slots.resumePreviousSlotStates();
     expect((await streamEvents("old")).at(-1)).toEqual({ type: "session-end", ending: "interrupted" });
-    expect(await adminClient().send("EXISTS", [slotKey(3), slotKey(4)])).toBe(0);
-    expect(await adminClient().send("GET", [SLOT_COUNT_KEY])).toBe(String(SLOT_COUNT));
+    expect(await currentSlotStates()).toEqual([idle, idle, idle]);
+  });
+
+  test("after the slot count was raised, the new slots start idle", async () => {
+    await store.writeSlotStates([{ state: "sleeping" }]);
+    await slots.resumePreviousSlotStates();
+    expect(await currentSlotStates()).toEqual([{ state: "sleeping" }, { state: "idle" }, { state: "idle" }]);
   });
 });
 

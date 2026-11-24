@@ -5,7 +5,7 @@ import { z } from "zod";
 import { positiveWholeNumber, SharedEnvironment, toSettings } from "@exhibition/shared";
 
 const RunnerEnvironment = SharedEnvironment.extend({
-  SLOT_COUNT: positiveWholeNumber.default(3), // the runner owns the slot count (D58)
+  SLOT_COUNT: positiveWholeNumber.default(3), // the runner owns the slot count (D65)
   EXCHANGE_CAP: positiveWholeNumber.default(15), // S2.4
   INTERMISSION_SECONDS: positiveWholeNumber.default(10), // S2.8
   DAILY_SPEND_CAP_DOLLARS: z.coerce.number().positive().default(2), // S6.1

@@ -3,8 +3,8 @@
 # ~pattern: read and write matching keys. %R~pattern: read only. +command: allowed command.
 # The runner's commands are those in apps/runner/src/store.ts; the web server's are settled when it is written.
 user default off
-user runner on >{{runner}} ~session:* ~slots ~slot:* ~slot-count ~spend:* ~sleeping:* %R~presence %R~watching:* +xadd +xrevrange +expire +hset +hgetall +get +set +incrbyfloat +exists +ping (~slot:* +del)
+user runner on >{{runner}} ~session:* ~slots ~spend:* ~sleeping:* %R~presence %R~watching:* +xadd +xrevrange +expire +get +set +incrbyfloat +exists +ping
 
-user web on >{{web}} %R~session:* %R~slots %R~slot:* %R~slot-count ~presence ~watching:* +xread +xrange +xrevrange +hgetall +get +set +ping
+user web on >{{web}} %R~session:* %R~slots ~presence ~watching:* +xread +xrange +xrevrange +set +ping
 user probe on nopass +ping
 user admin on >{{admin}} ~* &* +@all

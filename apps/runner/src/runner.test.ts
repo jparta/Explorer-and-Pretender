@@ -5,7 +5,7 @@
 // it sends the provider, and what it leaves in Valkey. Needs Docker.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { RedisClient } from "bun";
-import { PRESENCE_KEY, sessionKey, slotKey, spendKey, utcDate, watchingKey } from "@exhibition/shared";
+import { PRESENCE_KEY, SLOT_STATES_KEY, type SlotStatesEvent, sessionKey, spendKey, utcDate, watchingKey } from "@exhibition/shared";
 import { startValkey, type TestValkey } from "@exhibition/shared/testing";
 import { loadWordLists } from "./codeword.ts";
 import { loadRunnerConfig } from "./config.ts";
@@ -13,7 +13,7 @@ import { createModelClient } from "./llm.ts";
 import { abortableSleep, createSessionRunner, loadPrompts } from "./runner.ts";
 import { SlotLoops } from "./slots.ts";
 import { connectValkey, ValkeyStore } from "./store.ts";
-import { readHash, readStreamEvents } from "./valkey-test-helpers.ts";
+import { readStreamEvents } from "./valkey-test-helpers.ts";
 
 const COST_PER_CALL_DOLLARS = 0.01;
 
@@ -71,6 +71,7 @@ test("a watched slot runs a Session until the Explorer finds the Codeword", asyn
     intermissionMs: config.intermissionSeconds * 1000,
     presenceTimeoutMs: config.sharedSettings.presenceTimeoutSeconds * 1000,
     dailySpendCapDollars: config.dailySpendCapDollars,
+    slotStatesRetryPauseMs: 100,
     nowMs: Date.now,
     runSession: createSessionRunner({
       config,
@@ -88,7 +89,9 @@ test("a watched slot runs a Session until the Explorer finds the Codeword", asyn
   await slots.whenSessionEnded(0);
 
   // Valkey holds the whole Session, and the found message carries the Codeword.
-  const sessionId = (await readHash(valkey.adminClient, slotKey(0))).sessionId!;
+  const slotStates = async () =>
+    ((await readStreamEvents(valkey.adminClient, SLOT_STATES_KEY)).at(-1) as SlotStatesEvent).slots;
+  const sessionId = (await slotStates())[0]!.sessionId!;
   const events = await readStreamEvents(valkey.adminClient, sessionKey(sessionId));
   const codeword = (events[2] as { text: string }).text;
   expect(codeword).toMatch(/^[a-z]+-[a-z]+-[a-z]+$/);
@@ -99,7 +102,7 @@ test("a watched slot runs a Session until the Explorer finds the Codeword", asyn
     { type: "message", role: "explorer", text: `I found it: ${codeword}`, codeword },
     { type: "session-end", ending: "found" },
   ]);
-  expect(await readHash(valkey.adminClient, slotKey(0))).toEqual({ state: "intermission", sessionId });
+  expect((await slotStates())[0]).toEqual({ state: "intermission", sessionId });
   expect(Number(await valkey.adminClient.send("GET", [spendKey(utcDate())]))).toBeCloseTo(3 * COST_PER_CALL_DOLLARS);
 
   // The provider got each role's own model, with the API key.

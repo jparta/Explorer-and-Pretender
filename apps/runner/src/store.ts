@@ -10,12 +10,10 @@ import {
   SESSION_MAX_ENTRIES,
   SessionEvent,
   sessionKey,
-  SLOT_COUNT_KEY,
   SLOT_STATES_KEY,
   SLOT_STATES_MAX_ENTRIES,
-  slotKey,
-  SlotState,
-  type SlotStateEvent,
+  type SlotStateWithSession,
+  SlotStatesEvent,
   sleepingKey,
   spendKey,
   toStreamFields,
@@ -86,46 +84,28 @@ export class ValkeyStore {
     return decoded.value;
   }
 
-  // Writes slot:{n} in one command, then announces the change on the slots stream. A
-  // state without a Session writes an empty sessionId, which means no Session
-  // (architecture 3).
-  async setSlot(status: SlotStateEvent): Promise<void> {
-    await this.client.send("HSET", [slotKey(status.slot), "state", status.state, "sessionId", status.sessionId ?? ""]);
+  // Writes every slot's state as one event on the slots stream (D65). Its last entry is
+  // the current state of every slot, for the web server and for the next runner.
+  async writeSlotStates(slots: SlotStateWithSession[]): Promise<void> {
     await this.client.send("XADD", [
-      SLOT_STATES_KEY, "MAXLEN", "~", String(SLOT_STATES_MAX_ENTRIES), "*", ...toStreamFields(status),
+      SLOT_STATES_KEY, "MAXLEN", "~", String(SLOT_STATES_MAX_ENTRIES), "*", ...toStreamFields({ type: "slots", slots }),
     ]);
   }
 
-  // The slot's state, or nothing if it was never written or holds an unknown state.
-  async readSlot(slot: number): Promise<SlotStateEvent | undefined> {
-    const reply = await this.client.send("HGETALL", [slotKey(slot)]);
-    const fields: Record<string, string> = Array.isArray(reply) ? fieldsToObject(reply) : (reply ?? {});
-    if (fields.state === undefined) return undefined;
-    const state = SlotState.safeParse(fields.state);
-    if (!state.success) {
-      this.log.warn("unknown slot state", { slot, state: fields.state });
+  // Every slot's state as last written, or nothing if none was written yet or the last
+  // entry can't be read.
+  async readSlotStates(): Promise<SlotStateWithSession[] | undefined> {
+    const reply = (await this.client.send("XREVRANGE", [SLOT_STATES_KEY, "+", "-", "COUNT", "1"])) as
+      | [string, string[]][]
+      | null;
+    const fields = reply?.[0]?.[1];
+    if (!fields) return undefined;
+    const decoded = fromStreamFields(SlotStatesEvent, fields);
+    if (!decoded.ok) {
+      this.log.warn("unreadable slot states", { error: decoded.error });
       return undefined;
     }
-    return {
-      type: "slot",
-      slot,
-      state: state.data,
-      ...(fields.sessionId ? { sessionId: fields.sessionId } : {}),
-    };
-  }
-
-  async deleteSlot(slot: number): Promise<void> {
-    await this.client.send("DEL", [slotKey(slot)]);
-  }
-
-  // The slot count the last runner wrote (D58), or nothing on a first start.
-  async readSlotCount(): Promise<number | undefined> {
-    const value = await this.client.send("GET", [SLOT_COUNT_KEY]);
-    return value === null ? undefined : Number(value);
-  }
-
-  async writeSlotCount(count: number): Promise<void> {
-    await this.client.send("SET", [SLOT_COUNT_KEY, String(count)]);
+    return decoded.value.slots;
   }
 
   async isPresent(): Promise<boolean> {

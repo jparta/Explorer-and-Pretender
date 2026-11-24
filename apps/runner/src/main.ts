@@ -23,6 +23,7 @@ const MAX_TICK_AGE_MS = 10_000; // a loop that hasn't ticked for this long fails
 const MODEL_CALL_TIMEOUT_MS = 5 * 60_000;
 const VALKEY_ANSWER_TIMEOUT_MS = 5_000; // how long each start-up check waits for Valkey to answer
 const VALKEY_RETRY_PAUSE_MS = 5_000; // the pause before trying again after Valkey refused or failed
+const SLOT_STATES_RETRY_PAUSE_MS = 1_000; // the pause before writing the slot states again after a failure
 
 // A start-up error, such as a missing setting or Secret file, is logged as a JSON line
 // with its stack, and the process exits so Kubernetes restarts the container.
@@ -47,6 +48,7 @@ async function startRunner() {
     intermissionMs: config.intermissionSeconds * 1000,
     presenceTimeoutMs: config.sharedSettings.presenceTimeoutSeconds * 1000,
     dailySpendCapDollars: config.dailySpendCapDollars,
+    slotStatesRetryPauseMs: SLOT_STATES_RETRY_PAUSE_MS,
     nowMs: Date.now,
     runSession: createSessionRunner({
       config,
@@ -65,7 +67,8 @@ async function startRunner() {
     () => !loopsStarted || isAlive(slotLoops.lastTickAtMs(), Date.now(), MAX_TICK_AGE_MS),
   );
 
-  // While Valkey is down, the endings wait in the offline queue too, so shutdown waits
+  // While Valkey is down, the endings and the last slot-state write wait in the offline
+  // queue too (and a slot-state write that fails keeps being tried), so shutdown waits
   // until Kubernetes kills the pod after its 30 s grace period; the next runner's
   // resumePreviousSlotStates() then ends those Sessions (runner component doc, section 2.1).
   const shutdown = async () => {
@@ -82,8 +85,9 @@ async function startRunner() {
 
   // Valkey may not be reachable yet, right after the cluster starts. Commands then wait in
   // the client's offline queue rather than fail, so each check waits a few seconds for an
-  // answer and logs that it's still waiting. If picking up the slot states fails, for
-  // example because Valkey went away again, it waits and starts over.
+  // answer and logs that it's still waiting. If reading the previous slot states or ending
+  // a previous Session fails, for example because Valkey went away again, it waits and
+  // starts over. Writing the new slot states doesn't fail: the writer keeps trying.
   for (;;) {
     const answered = await Promise.race([
       store.ping().then(() => true),

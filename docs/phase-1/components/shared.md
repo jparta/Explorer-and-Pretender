@@ -47,8 +47,6 @@ Each key of architecture §3 has a constant or a small function that builds its 
 |---|---|
 | `session:{id}` | Expires 60 s after the Session ends; at most 10,000 entries |
 | `slots` | At most 1,000 entries |
-| `slot:{n}` | Permanent; an empty `sessionId` means no Session, and readers drop it before checking the state against `SlotStateEvent`, whose `sessionId` can't be empty |
-| `slot-count` | Permanent, rewritten at each runner start (D58) |
 | `presence` | Expires after the time without viewers setting (§4), 30 s to start with |
 | `watching:{n}` | Expires 10 s after the last heartbeat |
 | `spend:{date}`, `sleeping:{date}` | Expire after 2 days |
@@ -80,7 +78,7 @@ Only the settings that more than one component reads are here. The rest are sett
 
 The defaults are the spec's starting values. One ConfigMap, `settings`, generated in `deploy/base/kustomization.yaml` (D45), sets them as environment variables, and both components load it, so the values can't differ between them. The schema, `SharedEnvironment`, is exported too: a component extends it with its own settings and checks everything at once, so one error names every invalid variable, its own and the shared ones.
 
-**The slot count isn't here,** though both sides need it: it's the runner's setting, and the web server reads it from Valkey, where the runner writes it (D58). Two components reading the same setting can disagree for a moment, since a change restarts them one after the other.
+**The slot count isn't here,** though both sides need it: it's the runner's setting, and the web server learns it as the length of the slot states list in the `slots` stream (D65). Two components reading the same setting could disagree for a moment, since a change restarts them one after the other.
 
 **An invalid value stops the component at start-up.** Each value must be a positive whole number. If one isn't, `loadSharedSettings` throws an error naming every invalid variable, the process exits, and the pod's restarts show in `kubectl get pods` with the error in its logs. Running with a wrong value instead, such as a reveal rate of 0, would fail later and less clearly.
 

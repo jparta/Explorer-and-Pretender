@@ -4,10 +4,8 @@ import { startValkey, type TestValkey } from "./testing.ts";
 import {
   PRESENCE_KEY,
   sessionKey,
-  SLOT_COUNT_KEY,
   sleepingKey,
   SLOT_STATES_KEY,
-  slotKey,
   spendKey,
   utcDate,
   watchingKey,
@@ -55,8 +53,6 @@ describe("Valkey's user list", () => {
 
     ["web", ["XADD", sessionStreamKey, "*", "event", "{}"]],
     ["web", ["XADD", SLOT_STATES_KEY, "*", "event", "{}"]],
-    ["web", ["HSET", slotKey(0), "state", "idle"]],
-    ["web", ["SET", SLOT_COUNT_KEY, "3"]],
     ["web", ["GET", spendKey(date)]],
     ["web", ["SET", sleepingKey(date), "1"]],
     ["runner", ["GET", "unrelated"]],

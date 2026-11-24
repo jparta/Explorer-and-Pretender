@@ -1,6 +1,6 @@
 # Valkey
 
-Valkey is the store that the runner and the web server share (D3, D18). It holds every key in the architecture's Valkey contract (architecture §3): the Session streams, the `slots` stream, the `slot:{n}` hashes and the slot count, presence and watching keys, and the day's spend and sleeping marker. This component is only configuration and Kubernetes manifests: we run the official Valkey image and write no code for it.
+Valkey is the store that the runner and the web server share (D3, D18). It holds every key in the architecture's Valkey contract (architecture §3): the Session streams, the `slots` stream, presence and watching keys, and the day's spend and sleeping marker. This component is only configuration and Kubernetes manifests: we run the official Valkey image and write no code for it.
 
 ## 1. What runs
 
@@ -138,8 +138,8 @@ Each component logs in as its own Valkey user, allowed only what it needs (D46),
 
 ```
 user default off
-user runner on ~session:* ~slots ~slot:* ~slot-count ~spend:* ~sleeping:* %R~presence %R~watching:* +xadd +xrevrange +expire +hset +hgetall +del +get +set +incrbyfloat +exists +ping
-user web on %R~session:* %R~slots %R~slot:* %R~slot-count ~presence ~watching:* +xread +xrange +xrevrange +hgetall +get +set +ping
+user runner on ~session:* ~slots ~spend:* ~sleeping:* %R~presence %R~watching:* +xadd +xrevrange +expire +get +set +incrbyfloat +exists +ping
+user web on %R~session:* %R~slots ~presence ~watching:* +xread +xrange +xrevrange +set +ping
 user probe on nopass +ping
 user admin on ~* &* +@all
 ```

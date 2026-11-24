@@ -57,9 +57,7 @@ The front end lives inside `apps/web`, because the web server serves it (D20) an
 | Key | Type | Written by | Read by | Content | Lifetime |
 |---|---|---|---|---|---|
 | `session:{id}` | Stream | runner | web | The Session's events (§4.1), in order | Expires 1 minute after the Session ends (D19). Limited to 10,000 entries as a safety net |
-| `slots` | Stream | runner | web | Changes of slot state (§4.2) | Trimmed to the last 1,000 entries |
-| `slot:{n}` | Hash | runner | web | The current state of slot *n*: `state` and `sessionId`. An empty `sessionId` means no Session | Permanent, overwritten. Removed when the slot count is lowered |
-| `slot-count` | String (number) | runner | web | How many slots there are (D58) | Written at each runner start |
+| `slots` | Stream | runner | web | Every slot's state, one entry each time one changes (§4.2). The last entry is the current state of every slot (D65) | Trimmed to the last 1,000 entries |
 | `presence` | String | web | runner | Exists as long as any viewer is present | Expires 30 s after the last heartbeat (S2.7) |
 | `watching:{n}` | String | web | runner | Exists as long as someone watches slot *n* | Expires 10 s after the last heartbeat |
 | `spend:{date}` | String (number) | runner | runner | The day's spend in dollars (D11), with the date in UTC | Expires after 2 days |
@@ -67,9 +65,9 @@ The front end lives inside `apps/web`, because the web server serves it (D20) an
 
 Key names, expiry times and limits are in `packages/shared`: constants, apart from `presence`'s lifetime, which is a shared setting.
 
-**The slot count** is the runner's setting. The runner writes it to `slot-count` at start-up, and the web server reads it there and passes it to the page, so the two can't disagree (D58). The page ignores slots it doesn't know and shows missing ones as offline, which covers the moment while one side has restarted and the other hasn't.
+**The slot count** is the runner's setting, and it reaches the web server and the page as the length of the slot states list (§4.2), so the two can't disagree (D65). A lowered count is a shorter list.
 
-**Slot numbers** start from 0, everywhere: in keys such as `slot:{n}`, in events and in the SSE cursor (§5.1). A slot's number is then also its position in a list of slots. Viewers never see the numbers (S4.3).
+**Slot numbers** start from 0, everywhere: in keys such as `watching:{n}`, in events and in the SSE cursor (§5.1). A slot's number is then also its position in a list of slots. Viewers never see the numbers (S4.3).
 
 **Who may do what:** the runner and the web server each log in to Valkey as their own user, allowed only the keys and commands this table gives them (D46). The users are defined in the [Valkey component doc](components/valkey.md#6-users-and-permissions).
 
@@ -100,18 +98,18 @@ Each `message` event holds one whole message (D31). The browser opens a message 
 
 ### 4.2 Slot state
 
-The runner writes a `SlotStateEvent` to `slots` whenever a slot's state changes, and mirrors it in `slot:{n}`:
+Whenever a slot's state changes, and at start-up, the runner writes every slot's state as one `SlotStatesEvent` to `slots` (D65). A slot's position in the list is its number:
 
 ```ts
 type SlotState = "idle" | "running" | "intermission" | "sleeping";
 
-type SlotStateEvent = {
-  type: "slot";
-  slot: number;
-  state: SlotState;
-  sessionId?: string;  // set while running and during the intermission
+type SlotStatesEvent = {
+  type: "slots";
+  slots: { state: SlotState; sessionId?: string }[];  // sessionId: while running and during the intermission
 };
 ```
+
+The stream's last entry is therefore the current state of every slot, written in one command, so no reader sees a mix of old and new states.
 
 - `idle`: the slot shows that it is waiting for someone to watch (S4.6).
 - `running`: a Session is running.
@@ -120,10 +118,10 @@ type SlotStateEvent = {
 
 ### 4.3 What the browser receives
 
-The browser receives both kinds over one SSE connection, each tagged with its slot:
+The browser receives both kinds over one SSE connection: Session events tagged with their slot, and every slot's state as it is:
 
 ```ts
-type SseEvent = { slot: number } & (SessionEvent | SlotStateEvent);  // D55
+type SseEvent = ({ slot: number } & SessionEvent) | SlotStatesEvent;  // D55, D65
 ```
 
 ## 5. HTTP endpoints
@@ -144,7 +142,7 @@ Each SSE message carries one `SseEvent` as JSON in its `data:` field. Its `id:` 
 
 When the connection drops, the browser reconnects by itself and sends the last cursor back as `Last-Event-ID`. One connection carries three Session streams, so the cursor has to name a position in each.
 
-On every connection, the web server first sends each slot's current state. Then, per slot:
+On every connection, the web server first sends the `slots` stream's last entry, every slot's current state. Then, per slot:
 
 - **The same Session is still running:** the entries after the cursor's position. This is the *catch-up read*.
 - **The cursor's Session has ended but its stream hasn't expired:** the rest of that stream, so the viewer sees the ending. Then the slot's current Session, sent as for a new viewer.
@@ -186,7 +184,7 @@ sequenceDiagram
   W->>V: refresh presence, watching:2
   R->>V: slot 2 idle and watched?
   R->>V: XADD session:{id} session-start
-  R->>V: slot:2 = running, XADD slots
+  R->>V: XADD slots (slot 2 running)
   V-->>W: new slot state (blocking read)
   W-->>B: slot 2 running, session-start
   loop each message, until an ending
@@ -198,7 +196,7 @@ sequenceDiagram
     W-->>B: SSE event
   end
   R->>V: XADD session-end, expire stream in 1 min
-  R->>V: slot:2 = intermission, then idle or running
+  R->>V: XADD slots (slot 2 in intermission, then idle or running)
 ```
 
 **The runner** handles every slot in one process, with a loop per slot. Once a second, each loop checks its slot:
@@ -216,7 +214,7 @@ sequenceDiagram
 2. **A Codeword**, made of an adjective, a noun and a verb drawn at random from the word lists of the Pretender's kind, in `apps/runner/words/<kind>/` (S3.1, S3.2, D63).
 3. **The prompts.** The prompts are files in `apps/runner/prompts/`, one for the Explorer and one per kind of Pretender. The runner reads them, and fills the Codeword into the Pretender's prompt only (S3.3). They are never sent to the browser (S3.4).
 4. **An empty history.** The runner keeps the history itself, because a chat completion call is *stateless*: each call sends the whole conversation. Some providers offer conversations stored on their side, but those APIs differ between providers, which S5.2 rules out. The history is also small, and caching on the provider's side keeps resending it cheap.
-5. **Announce it.** Write `session-start` to the new stream, then set `slot:{n}` to `running` and write the change to `slots`. The stream exists before anyone is told about it.
+5. **Announce it.** Write `session-start` to the new stream, then write every slot's state, with slot *n* `running`, to `slots`. The stream exists before anyone is told about it.
 
 **The Explorer's first call.** The Explorer goes first (S2.2), so it has nothing to respond to yet, and some providers reject a call without a user message. So the Explorer's instructions are sent as its first *user* message rather than as a system prompt. The Pretender's instructions are its system prompt.
 
