@@ -7,3 +7,6 @@ Thumbs.db
 
 # Dependencies, installed by bun install
 node_modules/
+
+# Review guides, one per review round (AGENTS.md)
+.review/

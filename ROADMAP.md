@@ -2,7 +2,7 @@
 
 ## Phase 1 — Runs on local Kubernetes
 
-- [ ] Explorer and Pretender hold a Session; it ends when the Explorer sounds out the Secret, or at a turn limit
+- [ ] Explorer and Pretender hold a Session; it ends when the Explorer sounds out the Codeword, or at a turn limit
 - [ ] 3 slots in a looping horizontal carousel; a Session starts when someone watches its slot
 - [ ] Sessions are viewable live in the browser
 - [ ] Runner and web run as Deployments, and Valkey as a StatefulSet, on a local cluster
@@ -29,8 +29,10 @@
 - [ ] Deployed with GitOps (Flux or Argo CD): the cluster follows the repository by itself, and removes what is no longer in it, such as old hash-named ConfigMaps and the old values they held
 - [ ] Images pinned by digest, kept up to date by a bot that opens pull requests (D39)
 - [ ] Metrics and dashboards, sized against the VM's memory (D47)
+- [ ] Automatic cleanup of Session streams left without an end or expiry, such as one whose Session was never announced because a slot write failed
 
 ## Ideas, not promises
 
 - New spectators see each Session from its start, replayed quickly and easing into live speed. This would make the experience slightly more interactive, which would detract from the mood of the exhibition.
-- Variants within a kind: the terminal pretends to be different operating systems, the open world stages different scenes (a Wild West town, …), and the Pretender hides the Secret in different kinds of places.
+- Variants within a kind: the terminal pretends to be different operating systems, the open world stages different scenes (a Wild West town, …), and the Pretender hides the Codeword in different kinds of places.
+- Name-based outgoing rules: a network plugin such as Cilium in place of k3s's own, so the runner may connect only to the model provider's domain instead of any public address (D57).
