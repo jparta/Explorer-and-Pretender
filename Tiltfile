@@ -19,3 +19,19 @@ k8s_yaml(local(
 
 # Everything else comes from the Kustomize overlay for the local cluster (D10).
 k8s_yaml(kustomize('deploy/overlays/local'))
+
+# The runner's image, from the repository root so it includes the shared package.
+# In development, Tilt copies changed files into the running container and
+# bun --watch restarts the process, instead of rebuilding the image.
+docker_build(
+    'runner',
+    '.',
+    dockerfile='apps/runner/Dockerfile',
+    only=['package.json', 'bun.lock', 'packages/shared', 'apps/runner'],
+    entrypoint=['bun', '--watch', 'apps/runner/src/main.ts'],
+    live_update=[
+        sync('packages/shared/src', '/app/packages/shared/src'),
+        sync('apps/runner', '/app/apps/runner'),
+    ],
+)
+k8s_resource('runner', resource_deps=['valkey'])

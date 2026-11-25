@@ -6,3 +6,12 @@ namespace: exhibition
 resources:
   - namespace.yaml
   - valkey
+  - runner
+# The settings more than one component reads (shared component doc, section 4),
+# in one ConfigMap that each of them loads, so they can't differ between components.
+configMapGenerator:
+  - name: settings
+    literals:
+      - PRESENCE_TIMEOUT_SECONDS=30
+      - REVEAL_RATE_EXPLORER=30
+      - REVEAL_RATE_PRETENDER=120

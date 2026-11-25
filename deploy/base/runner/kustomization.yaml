@@ -1,0 +1,21 @@
+# The runner: runs the Sessions (docs/phase-1/components/runner.md).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - networkpolicy.yaml
+# The runner's own settings (spec section 7). A hash of the values is added to
+# the name, so changing one restarts the runner (D45).
+configMapGenerator:
+  - name: runner-config
+    literals:
+      - SLOTS=3  # the runner owns the slot count and tells the web server through Valkey (D58)
+      - TURN_CAP=15
+      - INTERMISSION_SECONDS=10
+      - DAILY_SPEND_CAP=2
+      # High while trying the models, so the cap doesn't cut messages or reasoning short;
+      # set after the trial runs show normal message lengths (S5.3).
+      - MAX_MESSAGE_TOKENS=50000
+      - LLM_BASE_URL=https://openrouter.ai/api/v1
+      - EXPLORER_MODEL=anthropic/claude-haiku-5.5  # D62
+      - PRETENDER_MODEL=anthropic/claude-haiku-5.5

@@ -1,0 +1,66 @@
+# The runner: one pod running every slot's Sessions (architecture 11).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runner
+  labels:
+    app: runner
+spec:
+  replicas: 1
+  # The old pod stops before the new one starts, so two runners never drive
+  # the same slot (D24).
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: runner
+  template:
+    metadata:
+      labels:
+        app: runner
+    spec:
+      # Shutdown: Kubernetes' default 30 s to end running Sessions as interrupted.
+      containers:
+        - name: runner
+          image: runner  # built by Tilt
+          envFrom:
+            - configMapRef:
+                name: settings
+            - configMapRef:
+                name: runner-config
+          ports:
+            - name: health
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 50m         # D30: no CPU limit
+              memory: 128Mi    # D26: request equals limit
+            limits:
+              memory: 128Mi
+          # Fails once a slot loop hasn't ticked for 10 s (D29). Kubernetes' defaults:
+          # checked every 10 s, restarted after 3 failures in a row.
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: health
+          # Each Secret mounted with only the runner's own entry (D37).
+          volumeMounts:
+            - name: llm-api
+              mountPath: /etc/llm-api
+              readOnly: true
+            - name: valkey-password
+              mountPath: /etc/valkey-password
+              readOnly: true
+      volumes:
+        - name: llm-api
+          secret:
+            secretName: llm-api
+            items:
+              - key: LLM_API_KEY
+                path: LLM_API_KEY
+        - name: valkey-password
+          secret:
+            secretName: valkey-passwords
+            items:
+              - key: runner
+                path: runner

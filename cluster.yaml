@@ -23,3 +23,9 @@ k3d:
     agents: 0
     # k3s's stable channel; update together with the Phase 3 VM.
     image: rancher/k3s:v1.37.2-k3s1
+    # The Kubernetes API on this machine only, at a fixed address that doesn't depend
+    # on the network, and that kubectl's config points at (D64).
+    kubeAPI:
+      host: "127.0.0.1"
+      hostIP: "127.0.0.1"
+      hostPort: "6550"

@@ -1,0 +1,50 @@
+# The runner accepts no connections from other pods, and connects out only to DNS,
+# to Valkey, and to port 443 on public addresses, where the model provider is (D57).
+# The kubelet's probes still get in: traffic from the pod's own node is allowed.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: runner
+spec:
+  podSelector:
+    matchLabels:
+      app: runner
+  policyTypes:
+    - Ingress
+    - Egress
+  # No ingress rules: no other pod may connect to it.
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app: valkey
+      ports:
+        - protocol: TCP
+          port: 6379
+    # A NetworkPolicy matches addresses, not names, so "only OpenRouter" can't be said:
+    # this allows port 443 on any address outside the reserved ranges. The cluster's
+    # pods (10.42.0.0/16) and Services (10.43.0.0/16) are inside 10.0.0.0/8.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8       # private
+              - 172.16.0.0/12    # private
+              - 192.168.0.0/16   # private
+              - 100.64.0.0/10    # carrier-grade NAT
+              - 169.254.0.0/16   # link-local, where cloud metadata services live
+      ports:
+        - protocol: TCP
+          port: 443
