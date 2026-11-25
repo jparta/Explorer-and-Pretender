@@ -1,10 +1,16 @@
-// For tests: read keys back as plain values, whichever shape the client returns.
+// For tests: read streams back as events, checked against the shared schemas.
 import type { RedisClient } from "bun";
-import { EVENT_FIELD } from "@exhibition/shared";
-import { fieldsToObject } from "./store.ts";
+import { fromStreamFields, SessionEvent, SlotStatesEvent } from "@exhibition/shared";
+import { z } from "zod";
 
-// A stream's events, oldest first, parsed from their one JSON field.
-export async function readStreamEvents(client: RedisClient, key: string): Promise<unknown[]> {
+const StreamEvent = z.union([SessionEvent, SlotStatesEvent]);
+
+// A stream's events, oldest first. An entry that doesn't match its schema fails the test.
+export async function readStreamEvents(client: RedisClient, key: string): Promise<z.infer<typeof StreamEvent>[]> {
   const reply = (await client.send("XRANGE", [key, "-", "+"])) as [string, string[]][];
-  return reply.map(([, fields]) => JSON.parse(fieldsToObject(fields)[EVENT_FIELD]!));
+  return reply.map(([id, fields]) => {
+    const decoded = fromStreamFields(StreamEvent, fields);
+    if (!decoded.ok) throw new Error(`${key} ${id}: ${decoded.error}`);
+    return decoded.value;
+  });
 }

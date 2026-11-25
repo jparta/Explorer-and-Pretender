@@ -151,11 +151,11 @@ The runner has no readiness probe, since nothing sends it traffic (D29).
 | Provider endpoint | `LLM_BASE_URL` | S5.2 |
 | Explorer's model | `EXPLORER_MODEL` | S5.1 |
 | Pretender's model | `PRETENDER_MODEL` | S5.1 |
-| Valkey's address | `VALKEY_HOST`, `VALKEY_PORT` | not set in `runner-config`: the defaults, `valkey` and 6379, apply |
+| Valkey's address | `VALKEY_HOST`, `VALKEY_PORT` | The Valkey Service's name and port |
 
 The values are in `runner-config`, in `deploy/base/runner/kustomization.yaml`, plus the shared settings ([shared component doc §4](shared.md#4-settings)). The runner checks its own and the shared ones together, so an invalid or missing value stops it at start-up with one error naming every bad variable.
 
-**The models have no default** (D62 chose them). If they're missing from `runner-config`, the runner stops at start-up with an error naming them, rather than starting and failing every call.
+**No setting has a default in the code.** The values live only in the ConfigMaps, so there's one place to read and change them. If one is missing, the runner stops at start-up with an error naming it, rather than starting with a value nobody chose.
 
 **Constants** ([shared component doc §4.1](shared.md#41-setting-or-constant) says which is which) are in `main.ts`, `runner.ts` and `session.ts`, each with a comment saying why. The pacing factor and the retry wait may be tuned after trial runs.
 

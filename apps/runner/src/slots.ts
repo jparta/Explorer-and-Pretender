@@ -14,8 +14,8 @@ export type RunSession = (slot: number, sessionId: string, signal: AbortSignal) 
 export type SlotLoopsOptions = {
   store: ValkeyStore;
   slotCount: number;
-  intermissionMs: number;
-  presenceTimeoutMs: number;
+  intermissionSeconds: number;
+  presenceTimeoutSeconds: number;
   dailySpendCapDollars: number;
   slotStatesRetryPauseMs: number; // the pause before writing the slot states again after a failure
   nowMs: () => number; // since the epoch
@@ -178,12 +178,12 @@ export class SlotLoops {
   // Nobody present: stop the Session. Presence that can't be checked because of an error
   // counts as present until the timeout runs out (runner component doc, section 2.5).
   private async stopIfNobodyPresent(slot: Running): Promise<void> {
-    const { store, nowMs, presenceTimeoutMs } = this.options;
+    const { store, nowMs, presenceTimeoutSeconds } = this.options;
     let present: boolean;
     try {
       present = await store.isPresent();
     } catch (error) {
-      if (nowMs() - slot.presenceConfirmedAtMs > presenceTimeoutMs) this.stop(slot, "absent");
+      if (nowMs() - slot.presenceConfirmedAtMs > presenceTimeoutSeconds * 1000) this.stop(slot, "absent");
       throw error;
     }
     if (present) slot.presenceConfirmedAtMs = nowMs();
@@ -263,7 +263,7 @@ export class SlotLoops {
     return {
       state: "intermission",
       ...(sessionId ? { sessionId } : {}),
-      intermissionEndsAtMs: this.options.nowMs() + this.options.intermissionMs,
+      intermissionEndsAtMs: this.options.nowMs() + this.options.intermissionSeconds * 1000,
     };
   }
 
@@ -275,14 +275,14 @@ export class SlotLoops {
   private setSlotState(slotNumber: number, nextState: Slot): Promise<void> {
     this.slotStates[slotNumber] = nextState;
     const sessionId = nextState.state === "running" || nextState.state === "intermission" ? nextState.sessionId : undefined;
-    this.log.info(`slot ${nextState.state}`, { slot: slotNumber, ...(sessionId ? { sessionId } : {}) });
+    this.log.info(`slot ${nextState.state}`, { slot: slotNumber, sessionId }); // JSON leaves out an unset sessionId
     return this.slotStatesWriter.writeChange();
   }
 
   private slotStatesForValkey(): SlotStateWithSession[] {
     return this.slotStates.map((slot) => {
       const sessionId = slot.state === "running" || slot.state === "intermission" ? slot.sessionId : undefined;
-      return { state: slot.state, ...(sessionId ? { sessionId } : {}) };
+      return { state: slot.state, sessionId }; // JSON leaves out an unset sessionId
     });
   }
 }

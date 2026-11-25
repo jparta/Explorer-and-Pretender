@@ -19,3 +19,5 @@ configMapGenerator:
       - LLM_BASE_URL=https://openrouter.ai/api/v1
       - EXPLORER_MODEL=anthropic/claude-haiku-5.5  # D62
       - PRETENDER_MODEL=anthropic/claude-haiku-5.5
+      - VALKEY_HOST=valkey
+      - VALKEY_PORT=6379

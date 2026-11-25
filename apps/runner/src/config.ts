@@ -1,34 +1,30 @@
 // The runner's settings (spec section 7), from environment variables set by the
 // ConfigMaps (D45): the shared settings, extended with the runner's own and checked
-// in one go, so one error names every invalid variable.
+// in one go, so one error names every missing or invalid variable. The values live only
+// in the ConfigMaps, so there are no defaults here.
 import { z } from "zod";
-import { positiveWholeNumber, SharedEnvironment, toSettings } from "@exhibition/shared";
+import { parseEnvironment, positiveWholeNumber, SharedEnvironment, toSettings } from "@exhibition/shared";
 
 const RunnerEnvironment = SharedEnvironment.extend({
-  SLOT_COUNT: positiveWholeNumber.default(3), // the runner owns the slot count (D65)
-  EXCHANGE_CAP: positiveWholeNumber.default(15), // S2.4
-  INTERMISSION_SECONDS: positiveWholeNumber.default(10), // S2.8
-  DAILY_SPEND_CAP_DOLLARS: z.coerce.number().positive().default(2), // S6.1
+  SLOT_COUNT: positiveWholeNumber, // the runner owns the slot count (D65)
+  EXCHANGE_CAP: positiveWholeNumber, // S2.4
+  INTERMISSION_SECONDS: positiveWholeNumber, // S2.8
+  DAILY_SPEND_CAP_DOLLARS: z.coerce.number().positive(), // S6.1
   // The maximum message length (S5.3), in tokens, as the provider enforces it.
   // A placeholder until trial runs show normal message lengths.
-  MAX_MESSAGE_TOKENS: positiveWholeNumber.default(1000),
+  MAX_MESSAGE_TOKENS: positiveWholeNumber,
   // Any OpenAI-compatible chat API (S5.2).
-  LLM_BASE_URL: z.url().default("https://openrouter.ai/api/v1"),
-  // No default: the runner doesn't start without models (S5.1).
+  LLM_BASE_URL: z.url(),
   EXPLORER_MODEL: z.string().min(1),
   PRETENDER_MODEL: z.string().min(1),
-  VALKEY_HOST: z.string().min(1).default("valkey"),
-  VALKEY_PORT: positiveWholeNumber.default(6379),
+  VALKEY_HOST: z.string().min(1),
+  VALKEY_PORT: positiveWholeNumber,
 });
 
 export type RunnerConfig = ReturnType<typeof loadRunnerConfig>;
 
 export function loadRunnerConfig(env: Record<string, string | undefined> = process.env) {
-  const result = RunnerEnvironment.safeParse(env);
-  if (!result.success) {
-    throw new Error(`Invalid settings:\n${z.prettifyError(result.error)}`);
-  }
-  const parsedEnv = result.data;
+  const parsedEnv = parseEnvironment(RunnerEnvironment, env);
   return {
     sharedSettings: toSettings(parsedEnv),
     slotCount: parsedEnv.SLOT_COUNT,

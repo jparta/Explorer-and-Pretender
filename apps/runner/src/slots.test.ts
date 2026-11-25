@@ -26,8 +26,8 @@ const START_MS = Date.parse("2026-11-17T12:00:00Z");
 const TODAY = utcDate(new Date(START_MS));
 const NEXT_MIDNIGHT_MS = Date.parse(`${TODAY}T00:00:00Z`) + 24 * 60 * 60 * 1000;
 const SPEND_CAP_DOLLARS = 2;
-const INTERMISSION_MS = 10_000;
-const PRESENCE_TIMEOUT_MS = 30_000;
+const INTERMISSION_SECONDS = 10;
+const PRESENCE_TIMEOUT_SECONDS = 30;
 const SLOT_COUNT = 3;
 const SLOT_STATES_RETRY_PAUSE_MS = 10;
 
@@ -65,8 +65,8 @@ beforeEach(async () => {
   slots = new SlotLoops({
     store,
     slotCount: SLOT_COUNT,
-    intermissionMs: INTERMISSION_MS,
-    presenceTimeoutMs: PRESENCE_TIMEOUT_MS,
+    intermissionSeconds: INTERMISSION_SECONDS,
+    presenceTimeoutSeconds: PRESENCE_TIMEOUT_SECONDS,
     dailySpendCapDollars: SPEND_CAP_DOLLARS,
     slotStatesRetryPauseMs: SLOT_STATES_RETRY_PAUSE_MS,
     nowMs: () => clockMs,
@@ -249,7 +249,7 @@ describe("ending", () => {
   test("after the intermission, an unwatched slot goes idle", async () => {
     await endFakeSession(0, "ran-its-course");
     await clearWatching(0);
-    clockMs += INTERMISSION_MS - 1;
+    clockMs += INTERMISSION_SECONDS * 1000 - 1;
     await slots.tickAll();
     expect((await slotState(0))?.state).toBe("intermission");
     clockMs += 1;
@@ -259,7 +259,7 @@ describe("ending", () => {
 
   test("after the intermission, a watched slot starts the next Session", async () => {
     await endFakeSession(0, "ran-its-course");
-    clockMs += INTERMISSION_MS;
+    clockMs += INTERMISSION_SECONDS * 1000;
     await slots.tickAll();
     expect(await slotState(0)).toEqual({ state: "running", sessionId: "s2" });
   });
@@ -297,7 +297,7 @@ describe("ending", () => {
     store.isPresent = async () => {
       throw new Error("Valkey unreachable");
     };
-    clockMs += PRESENCE_TIMEOUT_MS;
+    clockMs += PRESENCE_TIMEOUT_SECONDS * 1000;
     await slots.tickAll();
     expect(sessions[0]!.signal.aborted).toBe(false);
     clockMs += 1;

@@ -1,15 +1,16 @@
 // The settings of spec section 7 that more than one component reads
-// (shared component doc, section 4). Defaults are the spec's starting values.
+// (shared component doc, section 4). The values live only in the ConfigMaps, so the
+// code has no defaults: a missing variable stops the component at start-up.
 import { z } from "zod";
 
 export const positiveWholeNumber = z.coerce.number().int().positive();
 
 // Exported so a component can extend it with its own settings and check everything in
-// one go, getting one error that names every invalid variable.
+// one go, getting one error that names every missing or invalid variable.
 export const SharedEnvironment = z.object({
-  PRESENCE_TIMEOUT_SECONDS: positiveWholeNumber.default(30),
-  REVEAL_RATE_EXPLORER_CHARS_PER_SECOND: positiveWholeNumber.default(30),
-  REVEAL_RATE_PRETENDER_CHARS_PER_SECOND: positiveWholeNumber.default(120),
+  PRESENCE_TIMEOUT_SECONDS: positiveWholeNumber,
+  REVEAL_RATE_EXPLORER_CHARS_PER_SECOND: positiveWholeNumber,
+  REVEAL_RATE_PRETENDER_CHARS_PER_SECOND: positiveWholeNumber,
 });
 
 export type SharedSettings = ReturnType<typeof toSettings>;
@@ -22,11 +23,18 @@ export function toSettings(parsedEnv: z.infer<typeof SharedEnvironment>) {
   };
 }
 
-// Throws one error naming every invalid variable, so a misconfigured component stops at start-up.
+// Checks the environment against a schema. Throws one error naming every missing or
+// invalid variable, so a misconfigured component stops at start-up.
+export function parseEnvironment<Schema extends z.ZodType>(
+  schema: Schema,
+  env: Record<string, string | undefined>,
+): z.infer<Schema> {
+  const result = schema.safeParse(env);
+  if (!result.success) throw new Error(`Invalid settings:
+${z.prettifyError(result.error)}`);
+  return result.data;
+}
+
 export function loadSharedSettings(env: Record<string, string | undefined> = process.env): SharedSettings {
-  const result = SharedEnvironment.safeParse(env);
-  if (!result.success) {
-    throw new Error(`Invalid settings:\n${z.prettifyError(result.error)}`);
-  }
-  return toSettings(result.data);
+  return toSettings(parseEnvironment(SharedEnvironment, env));
 }

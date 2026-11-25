@@ -3,28 +3,32 @@ import { describe, expect, test } from "bun:test";
 import { loadRunnerConfig, readSecretFile } from "./config.ts";
 
 const models = { EXPLORER_MODEL: "vendor/explorer", PRETENDER_MODEL: "vendor/pretender" };
+// Every setting, the runner's and the shared ones.
+const env = {
+  ...models,
+  SLOT_COUNT: "2",
+  EXCHANGE_CAP: "4",
+  INTERMISSION_SECONDS: "7",
+  DAILY_SPEND_CAP_DOLLARS: "0.5",
+  MAX_MESSAGE_TOKENS: "300",
+  LLM_BASE_URL: "http://localhost:11434/v1",
+  VALKEY_HOST: "localhost",
+  VALKEY_PORT: "6380",
+  PRESENCE_TIMEOUT_SECONDS: "45",
+  REVEAL_RATE_EXPLORER_CHARS_PER_SECOND: "30",
+  REVEAL_RATE_PRETENDER_CHARS_PER_SECOND: "120",
+};
 
 describe("loadRunnerConfig", () => {
-  test("starts with only the models set", () => {
-    const config = loadRunnerConfig(models);
-    expect(config.explorerModel).toBe("vendor/explorer");
-    expect(config.pretenderModel).toBe("vendor/pretender");
-    expect(config.slotCount).toBeGreaterThan(0);
+  test("refuses to start with settings missing, naming each: the values live only in the ConfigMaps", () => {
+    const load = () => loadRunnerConfig(models);
+    for (const name of ["SLOT_COUNT", "EXCHANGE_CAP", "INTERMISSION_SECONDS", "VALKEY_HOST", "PRESENCE_TIMEOUT_SECONDS"]) {
+      expect(load).toThrow(new RegExp(name));
+    }
   });
 
   test("takes each value from its variable, its own and the shared ones", () => {
-    const config = loadRunnerConfig({
-      ...models,
-      SLOT_COUNT: "2",
-      EXCHANGE_CAP: "4",
-      INTERMISSION_SECONDS: "7",
-      DAILY_SPEND_CAP_DOLLARS: "0.5",
-      MAX_MESSAGE_TOKENS: "300",
-      LLM_BASE_URL: "http://localhost:11434/v1",
-      VALKEY_HOST: "localhost",
-      VALKEY_PORT: "6380",
-      PRESENCE_TIMEOUT_SECONDS: "45",
-    });
+    const config = loadRunnerConfig(env);
     expect(config).toMatchObject({
       slotCount: 2,
       exchangeCap: 4,
@@ -46,14 +50,14 @@ describe("loadRunnerConfig", () => {
 
   test("one error names every invalid variable, the runner's and the shared ones", () => {
     const load = () =>
-      loadRunnerConfig({ ...models, EXCHANGE_CAP: "0", DAILY_SPEND_CAP_DOLLARS: "abc", PRESENCE_TIMEOUT_SECONDS: "-1" });
+      loadRunnerConfig({ ...env, EXCHANGE_CAP: "0", DAILY_SPEND_CAP_DOLLARS: "abc", PRESENCE_TIMEOUT_SECONDS: "-1" });
     expect(load).toThrow(/EXCHANGE_CAP/);
     expect(load).toThrow(/DAILY_SPEND_CAP_DOLLARS/);
     expect(load).toThrow(/PRESENCE_TIMEOUT_SECONDS/);
   });
 
   test("refuses a base URL that isn't a URL", () => {
-    expect(() => loadRunnerConfig({ ...models, LLM_BASE_URL: "openrouter" })).toThrow(/LLM_BASE_URL/);
+    expect(() => loadRunnerConfig({ ...env, LLM_BASE_URL: "openrouter" })).toThrow(/LLM_BASE_URL/);
   });
 });
 

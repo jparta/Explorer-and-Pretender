@@ -70,17 +70,17 @@ It doesn't list what each component *may* do: that list would only repeat the us
 
 Only the settings that more than one component reads are here. The rest are settings of the component that uses them: the exchange cap and the daily spend cap, for example, are the runner's, set in its ConfigMap. (The day's spend so far is counted in Valkey, in `spend:{date}`; the cap it's compared against is the runner's setting.)
 
-| Setting | Environment variable | Default | Read by |
-|---|---|---|---|
-| Time without viewers before a Session stops | `PRESENCE_TIMEOUT_SECONDS` | 30 | web (the `presence` key's expiry), and the runner: how long a presence check that fails with an error still counts as present |
-| Reveal rate, Explorer | `REVEAL_RATE_EXPLORER_CHARS_PER_SECOND` | 30 characters per second | runner (pacing), front end (typing, through web) |
-| Reveal rate, Pretender | `REVEAL_RATE_PRETENDER_CHARS_PER_SECOND` | 120 characters per second | the same |
+| Setting | Environment variable | Read by |
+|---|---|---|
+| Time without viewers before a Session stops | `PRESENCE_TIMEOUT_SECONDS` | web (the `presence` key's expiry), and the runner: how long a presence check that fails with an error still counts as present |
+| Reveal rate, Explorer | `REVEAL_RATE_EXPLORER_CHARS_PER_SECOND` | runner (pacing), front end (typing, through web) |
+| Reveal rate, Pretender | `REVEAL_RATE_PRETENDER_CHARS_PER_SECOND` | the same |
 
-The defaults are the spec's starting values. One ConfigMap, `settings`, generated in `deploy/base/kustomization.yaml` (D45), sets them as environment variables, and both components load it, so the values can't differ between them. The schema, `SharedEnvironment`, is exported too: a component extends it with its own settings and checks everything at once, so one error names every invalid variable, its own and the shared ones.
+The values start as the spec's starting values and live only in one ConfigMap, `settings`, generated in `deploy/base/kustomization.yaml` (D45), sets them as environment variables, and both components load it, so the values can't differ between them. The schema, `SharedEnvironment`, is exported too: a component extends it with its own settings and checks everything at once, so one error names every invalid variable, its own and the shared ones.
 
 **The slot count isn't here,** though both sides need it: it's the runner's setting, and the web server learns it as the length of the slot states list in the `slots` stream (D65). Two components reading the same setting could disagree for a moment, since a change restarts them one after the other.
 
-**An invalid value stops the component at start-up.** Each value must be a positive whole number. If one isn't, `loadSharedSettings` throws an error naming every invalid variable, the process exits, and the pod's restarts show in `kubectl get pods` with the error in its logs. Running with a wrong value instead, such as a reveal rate of 0, would fail later and less clearly.
+**A missing or invalid value stops the component at start-up.** Each value must be set, and be a positive whole number. If one isn't, `parseEnvironment` throws an error naming every missing or invalid variable, the process exits, and the pod's restarts show in `kubectl get pods` with the error in its logs. Running with a wrong value instead, such as a reveal rate of 0, would fail later and less clearly.
 
 ### 4.1 Setting or constant
 

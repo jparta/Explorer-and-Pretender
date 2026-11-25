@@ -60,6 +60,14 @@ test("a watched slot runs a Session until the Explorer finds the Codeword", asyn
     EXPLORER_MODEL: "test/explorer",
     PRETENDER_MODEL: "test/pretender",
     LLM_BASE_URL: `http://localhost:${provider.port}/v1`,
+    SLOT_COUNT: "3",
+    EXCHANGE_CAP: "15",
+    INTERMISSION_SECONDS: "10",
+    DAILY_SPEND_CAP_DOLLARS: "2",
+    MAX_MESSAGE_TOKENS: "1000",
+    VALKEY_HOST: "localhost", // not used: the test connects to its own Valkey
+    VALKEY_PORT: "6379",
+    PRESENCE_TIMEOUT_SECONDS: "30",
     // Fast enough that pacing takes no noticeable time.
     REVEAL_RATE_EXPLORER_CHARS_PER_SECOND: "1000000",
     REVEAL_RATE_PRETENDER_CHARS_PER_SECOND: "1000000",
@@ -68,8 +76,8 @@ test("a watched slot runs a Session until the Explorer finds the Codeword", asyn
   const slots = new SlotLoops({
     store,
     slotCount: config.slotCount,
-    intermissionMs: config.intermissionSeconds * 1000,
-    presenceTimeoutMs: config.sharedSettings.presenceTimeoutSeconds * 1000,
+    intermissionSeconds: config.intermissionSeconds,
+    presenceTimeoutSeconds: config.sharedSettings.presenceTimeoutSeconds,
     dailySpendCapDollars: config.dailySpendCapDollars,
     slotStatesRetryPauseMs: 100,
     nowMs: Date.now,

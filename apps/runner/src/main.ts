@@ -46,8 +46,8 @@ async function startRunner() {
   const slotLoops = new SlotLoops({
     store,
     slotCount: config.slotCount,
-    intermissionMs: config.intermissionSeconds * 1000,
-    presenceTimeoutMs: config.sharedSettings.presenceTimeoutSeconds * 1000,
+    intermissionSeconds: config.intermissionSeconds,
+    presenceTimeoutSeconds: config.sharedSettings.presenceTimeoutSeconds,
     dailySpendCapDollars: config.dailySpendCapDollars,
     slotStatesRetryPauseMs: SLOT_STATES_RETRY_PAUSE_MS,
     nowMs: Date.now,

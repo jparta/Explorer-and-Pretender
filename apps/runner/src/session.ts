@@ -32,6 +32,9 @@ export type SessionDeps = {
   sleep: (ms: number, signal: AbortSignal) => Promise<void>;
 };
 
+// One message of the conversation so far, as the models see it again.
+type HistoryEntry = Pick<MessageEvent, "role" | "text">;
+
 const CODEWORD_PLACEHOLDER = "<Codeword>";
 
 export function fillPrompt(template: string, codeword: string): string {
@@ -57,7 +60,7 @@ async function converse(
   signal: AbortSignal,
   revealed: { atMs: number },
 ): Promise<Ending> {
-  const history: { role: Role; text: string }[] = [];
+  const history: HistoryEntry[] = [];
 
   try {
     for (let exchange = 1; exchange <= setup.exchangeCap; exchange++) {
@@ -92,7 +95,7 @@ async function converse(
 // Each model sees its own earlier messages as its own (assistant) and the other's as
 // coming from the other party (user). Only the text is kept, so no reasoning is carried
 // over (S5.4).
-function contextFor(role: Role, setup: SessionSetup, history: { role: Role; text: string }[]): ChatMessage[] {
+function contextFor(role: Role, setup: SessionSetup, history: HistoryEntry[]): ChatMessage[] {
   const instructions: ChatMessage =
     role === "explorer"
       ? { role: "user", content: setup.explorerPrompt }

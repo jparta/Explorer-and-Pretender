@@ -117,11 +117,11 @@ export class ValkeyStore {
   }
 
   async isPresent(): Promise<boolean> {
-    return (await this.client.send("EXISTS", [PRESENCE_KEY])) === 1;
+    return this.exists(PRESENCE_KEY);
   }
 
   async isWatched(slot: number): Promise<boolean> {
-    return (await this.client.send("EXISTS", [watchingKey(slot)])) === 1;
+    return this.exists(watchingKey(slot));
   }
 
   // The day's spend in dollars; a day without a key counts as 0 (architecture 8).
@@ -138,7 +138,11 @@ export class ValkeyStore {
   }
 
   async isSleeping(date: string): Promise<boolean> {
-    return (await this.client.send("EXISTS", [sleepingKey(date)])) === 1;
+    return this.exists(sleepingKey(date));
+  }
+
+  private async exists(key: string): Promise<boolean> {
+    return (await this.client.send("EXISTS", [key])) === 1;
   }
 
   async setSleeping(date: string): Promise<void> {

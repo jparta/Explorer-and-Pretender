@@ -1,7 +1,7 @@
 // One call to the model provider's chat completions API, through the openai package
 // (D13), not streamed (D31). Any OpenAI-compatible API works (S5.2).
 import OpenAI from "openai";
-import { log as defaultLog, type Logger } from "./log.ts";
+import { log as defaultLog, describeError, type Logger } from "./log.ts";
 
 export type ChatMessage = OpenAI.Chat.ChatCompletionMessageParam;
 
@@ -75,5 +75,5 @@ function toFailedResult(error: unknown): ModelResult {
     return { ok: false, reason, errorMessage: message, costDollars: 0 };
   }
   // No HTTP status: a connection error, a timeout or a stop.
-  return { ok: false, reason: "failed", errorMessage: error instanceof Error ? error.message : String(error), costDollars: 0 };
+  return { ok: false, reason: "failed", errorMessage: describeError(error), costDollars: 0 };
 }

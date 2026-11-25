@@ -1,6 +1,7 @@
 // Puts the parts of a Session together: a new Codeword, the prompts, the model calls,
 // the stream writes and the spend. The slot loop calls the function this returns to run
 // each Session. Tested end to end in runner.test.ts.
+import { setTimeout as sleepUnlessAborted } from "node:timers/promises";
 import type OpenAI from "openai";
 import { type Role, utcDate } from "@exhibition/shared";
 import { makeCodeword, type WordLists } from "./codeword.ts";
@@ -84,16 +85,5 @@ export function createSessionRunner(options: {
 
 // A sleep that a stopped Session cuts short: it rejects as soon as the signal is aborted.
 export function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal.aborted) return reject(signal.reason);
-    const onAbort = () => {
-      clearTimeout(timer);
-      reject(signal.reason);
-    };
-    const timer = setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
+  return sleepUnlessAborted(ms, undefined, { signal });
 }
