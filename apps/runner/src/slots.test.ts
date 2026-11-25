@@ -199,6 +199,29 @@ describe("starting", () => {
     expect(ttlSeconds).toBeLessThanOrEqual(24 * 60 * 60);
   });
 
+  test("shutting down while a Session is announced: its conversation never starts, and its ending is written before shutdown resolves", async () => {
+    // The write that announces the Session waits until the test lets it through.
+    const writeSlotStates = store.writeSlotStates.bind(store);
+    let letThrough = () => {};
+    store.writeSlotStates = (states) =>
+      states.some((slot) => slot.state === "running")
+        ? new Promise((resolve) => {
+            letThrough = () => writeSlotStates(states).then(resolve);
+          })
+        : writeSlotStates(states);
+    await setPresent();
+    await setWatching(0);
+    const slot0Tick = slots.tick(0);
+    while ((await streamEvents("s1")).length === 0) await Bun.sleep(1);
+    await Bun.sleep(20);
+    const shutdown = slots.shutdown();
+    letThrough();
+    await shutdown;
+    expect(sessions).toHaveLength(0);
+    expect((await streamEvents("s1")).at(-1)).toEqual({ type: "session-end", ending: "interrupted" });
+    await slot0Tick;
+  });
+
   test("a running slot doesn't start a second Session", async () => {
 
     await setPresent();
@@ -431,10 +454,16 @@ describe("start-up after a crash (architecture 9)", () => {
 describe("liveness", () => {
   beforeEach(() => slots.resumePreviousSlotStates());
 
+  test("right after start-up, every slot counts as having just ticked, so a slow first tick doesn't fail liveness", async () => {
+    clockMs = START_MS + 60_000;
+    await slots.resumePreviousSlotStates();
+    expect(slots.lastTickAtMs()).toEqual([clockMs, clockMs, clockMs]);
+  });
+
   test("each tick records when its slot last ticked", async () => {
-    expect(slots.lastTickAtMs()).toEqual([0, 0, 0]);
+    clockMs += 1_000;
     await slots.tick(1);
-    expect(slots.lastTickAtMs()).toEqual([0, clockMs, 0]);
+    expect(slots.lastTickAtMs()).toEqual([START_MS, clockMs, START_MS]);
   });
 
   test("a tick that fails with an error still counts: the loop is alive even when Valkey isn't", async () => {

@@ -8,6 +8,7 @@ import { createModelClient } from "./llm.ts";
 import { describeError, errorFields, log } from "./log.ts";
 import { createSessionRunner, loadPrompts } from "./runner.ts";
 import { SlotLoops } from "./slots.ts";
+import { waitUntilValkeyAnswers } from "./startup.ts";
 import { connectValkey, ValkeyStore } from "./store.ts";
 
 // Where the Secrets are mounted (D37), and the constants of the loop.
@@ -89,17 +90,11 @@ async function startRunner() {
   // a previous Session fails, for example because Valkey went away again, it waits and
   // starts over. Writing the new slot states doesn't fail: the writer keeps trying.
   for (;;) {
-    const answered = await Promise.race([
-      store.ping().then(() => true),
-      Bun.sleep(VALKEY_ANSWER_TIMEOUT_MS).then(() => false),
-    ]).catch((error) => {
-      log.warn("start-up: Valkey refused", { error: describeError(error) });
-      return false;
+    await waitUntilValkeyAnswers(() => store.ping(), {
+      answerTimeoutMs: VALKEY_ANSWER_TIMEOUT_MS,
+      retryPauseMs: VALKEY_RETRY_PAUSE_MS,
+      log,
     });
-    if (!answered) {
-      log.warn("start-up: waiting for Valkey");
-      continue;
-    }
     try {
       await slotLoops.resumePreviousSlotStates();
       break;

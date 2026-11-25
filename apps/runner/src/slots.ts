@@ -96,6 +96,8 @@ export class SlotLoops {
       }
     }
     await this.whenSlotStatesWritten();
+    // The loops start now: until each has ticked once, they count as having just ticked.
+    this.lastTickAtMsBySlot.fill(this.options.nowMs());
   }
 
   async tickAll(): Promise<void> {
@@ -201,11 +203,17 @@ export class SlotLoops {
     await store.startSession(sessionId, n);
     const abortController = new AbortController();
     const running: Running = { state: "running", sessionId, abortController, presenceConfirmedAtMs: nowMs(), endingHandled: Promise.resolve() };
-    // Waits until Valkey shows the slot running, however long that takes, so the Session
-    // only starts once everyone can know about it.
-    await this.setSlotState(n, running);
-    this.log.info("Session started", { slot: n, sessionId });
-    running.endingHandled = runSession(n, sessionId, abortController.signal)
+    // The conversation starts once Valkey shows the slot running, however long that
+    // takes, so it only starts once everyone can know about it. endingHandled covers the
+    // wait too, so a shutdown meanwhile waits for this Session's ending; the conversation
+    // then never starts.
+    const announced = this.setSlotState(n, running);
+    running.endingHandled = announced
+      .then((): Promise<Ending> => {
+        if (abortController.signal.aborted) return Promise.resolve("interrupted");
+        this.log.info("Session started", { slot: n, sessionId });
+        return runSession(n, sessionId, abortController.signal);
+      })
       .catch((error): Ending => {
         this.log.error("Session failed", { slot: n, sessionId, ...errorFields(error) });
         return "interrupted";
@@ -214,6 +222,7 @@ export class SlotLoops {
         this.log.info("Session ended", { slot: n, sessionId, ending });
         return this.endSessionAndSetNextState(n, { sessionId, ending, stopReason: running.stopReason });
       });
+    await announced;
   }
 
   // Writes the ending, then moves the slot on: to idle if nobody is there to see the

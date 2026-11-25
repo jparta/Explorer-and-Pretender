@@ -39,7 +39,7 @@ If writing the ending fails, the slot waits in its intermission and later ticks 
 
 **Start-up:**
 
-1. **Waits for Valkey.** Until Valkey answers, commands wait in the client's offline queue (§2.5), so start-up sends `PING` and gives it a few seconds; while there's no answer, it logs that it's waiting and tries again. If reading the previous states or ending a previous Session fails, for example because Valkey went away again, it waits a few seconds and starts over from here. Writing the new slot states isn't a step that fails: the writer tries again until it succeeds (§2.4), and start-up waits for it.
+1. **Waits for Valkey.** Until Valkey answers, commands wait in the client's offline queue (§2.5), so start-up sends `PING` and gives it a few seconds; while there's no answer, it logs that it's waiting and tries again. A `PING` that Valkey refuses, such as one with a wrong password, is tried again after a pause of a few seconds, so the log doesn't fill with refusals (`startup.ts`). If reading the previous states or ending a previous Session fails, for example because Valkey went away again, it waits a few seconds and starts over from here. Writing the new slot states isn't a step that fails: the writer tries again until it succeeds (§2.4), and start-up waits for it.
 2. **Reads the previous slot states,** the last entry of the `slots` stream. For a slot beyond a lowered count, it ends a Session left running as interrupted, as in step 3, so its stream doesn't stay open forever; the slot itself just drops out of the list.
 3. **Each slot's previous state:**
    - `running`: only a crash leaves a slot running, since a clean shutdown moves it to its intermission. Unless the stream already ends with `session-end` (a runner can die between writing it and moving the slot on), the runner ends the Session as interrupted, then starts the slot's intermission.
@@ -47,7 +47,7 @@ If writing the ending fails, the slot waits in its intermission and later ticks 
    - `sleeping` or `idle`: kept as it is.
    - Nothing at all: set to idle.
 
-**Shutdown:** on SIGTERM, the runner stops every running Session, waits until each ending and the last slot states are written ([architecture §9](../architecture.md#9-when-things-fail)), and exits, normally well under a second. While Valkey is down, those writes wait in the offline queue, and a slot-state write that keeps failing keeps being tried (§2.4), so shutdown waits until Kubernetes kills the pod after its 30-second grace period; the next runner's start-up then ends those Sessions. A 30-second shutdown is therefore expected during a Valkey outage, not a bug.
+**Shutdown:** on SIGTERM, the runner stops every running Session (one still being announced too: its conversation then never starts), waits until each ending and the last slot states are written ([architecture §9](../architecture.md#9-when-things-fail)), and exits, normally well under a second. While Valkey is down, those writes wait in the offline queue, and a slot-state write that keeps failing keeps being tried (§2.4), so shutdown waits until Kubernetes kills the pod after its 30-second grace period; the next runner's start-up then ends those Sessions. A 30-second shutdown is therefore expected during a Valkey outage, not a bug.
 
 ### 2.2 A Session's conversation
 
@@ -135,7 +135,7 @@ Each Session's Codeword is logged when it's chosen, which helps when checking wh
 
 `GET /livez` answers 200 while every slot loop has finished a tick recently, and 503 otherwise (D29). A tick that fails with an error still counts: the probe asks whether the loop is alive, not whether Valkey is. A tick that *waits*, as during a Valkey outage (§2.5), doesn't finish, so a long outage does restart the runner.
 
-A stuck loop is restarted after about 40 s: the endpoint fails once a loop hasn't ticked for 10 s, then Kubernetes restarts the runner's container after three failed probes, 10 s apart. The pod itself stays: it keeps its name, and its restart count goes up. During start-up, before the loops run, the endpoint answers 200.
+A stuck loop is restarted after about 40 s: the endpoint fails once a loop hasn't ticked for 10 s, then Kubernetes restarts the runner's container after three failed probes, 10 s apart. The pod itself stays: it keeps its name, and its restart count goes up. During start-up, before the loops run, the endpoint answers 200. When they start, each counts as having just ticked, so a slow first tick doesn't fail the probe.
 
 The runner has no readiness probe, since nothing sends it traffic (D29).
 
@@ -220,7 +220,7 @@ The tests need Docker: those touching Valkey start a throwaway Valkey container 
 
 The fake provider runs inside the test process, on this machine, outside the cluster and its NetworkPolicy; that's why it can be reached at a local address that the runner's pod couldn't.
 
-`main.ts` has no tests of its own: it only starts and stops the parts. Running it in the cluster checks it (below).
+`main.ts` has no tests of its own: it only starts and stops the parts. Its wait for Valkey is in `startup.ts`, which has. Running it in the cluster checks it (below).
 
 **Not yet checked in the cluster: a Session with real models.** That needs a real key, and costs a few cents. It's the first real run: it tries each reasoning effort level (D62), which first needs a setting for the effort, after which the placeholders (message length, pacing) get tuned.
 
