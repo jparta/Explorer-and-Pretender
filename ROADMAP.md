@@ -33,6 +33,6 @@
 
 ## Ideas, not promises
 
-- New spectators see each Session from its start, replayed quickly and easing into live speed. This would make the experience slightly more interactive, which would detract from the mood of the exhibition.
+- New spectators see each Session from its start, replayed quickly and easing into live speed. This would make the experience slightly more interactive, which would detract from the mood of the exhibition. Streams (D19) keep it possible: an ended Session's events stay in Valkey for a minute.
 - Variants within a kind: the terminal pretends to be different operating systems, the open world stages different scenes (a Wild West town, …), and the Pretender hides the Codeword in different kinds of places.
 - Name-based outgoing rules: a network plugin such as Cilium in place of k3s's own, so the runner may connect only to the model provider's domain instead of any public address (D57).
