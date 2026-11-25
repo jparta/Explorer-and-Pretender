@@ -109,10 +109,10 @@ async function startRunner() {
     models: { explorer: config.explorerModel, pretender: config.pretenderModel },
   });
   loopsStarted = true;
-  for (let n = 0; n < config.slotCount; n++) {
+  for (let slotNumber = 0; slotNumber < config.slotCount; slotNumber++) {
     void (async () => {
       while (!stopping) {
-        await slotLoops.tick(n);
+        await slotLoops.tick(slotNumber);
         await Bun.sleep(TICK_INTERVAL_MS);
       }
     })();
