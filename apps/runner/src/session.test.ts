@@ -39,11 +39,11 @@ async function runScriptedSession(
         clockMs += options.generationMs ?? 0;
         return answer(role, calls.length);
       },
-      write:
-        options.write ??
-        (async (event) => {
-          written.push({ event, atMs: clockMs });
-        }),
+      // Every write is recorded, then passed on to the test's own write, if any.
+      write: async (event) => {
+        written.push({ event, atMs: clockMs });
+        await options.write?.(event);
+      },
       addSpend: async (costDollars) => {
         spentDollars.push(costDollars);
       },
@@ -55,7 +55,7 @@ async function runScriptedSession(
     },
     options.signal ?? new AbortController().signal,
   );
-  return { ending, calls, written, spentDollars };
+  return { ending, endedAtMs: clockMs, calls, written, spentDollars };
 }
 
 const ok = (text: string, costDollars = 0.001): ModelResult => ({ ok: true, text, costDollars, wasCutOff: false });
@@ -156,6 +156,32 @@ describe("runSession", () => {
     }
     // The first message is written as soon as it arrives.
     expect(written[0]!.atMs).toBe(100);
+  });
+
+  test("the last message's reveal is waited out before the Session ends, whatever the ending (D66)", async () => {
+    const found = await runScriptedSession((role, call) => (call === 3 ? ok(`cat x # ${CODEWORD}`) : chatter(role, call)));
+    const ranItsCourse = await runScriptedSession(chatter);
+    for (const { endedAtMs, written } of [found, ranItsCourse]) {
+      const last = written.at(-1)!;
+      const revealMs = (PACING_FACTOR * last.event.text.length * 1000) / setup.revealRateCharsPerSecond[last.event.role];
+      expect(endedAtMs - last.atMs).toBeCloseTo(revealMs, 6);
+    }
+  });
+
+  test("stopped from outside while the last message is revealed: ends at once, with the ending it had", async () => {
+    const controller = new AbortController();
+    const { ending, endedAtMs, written } = await runScriptedSession(
+      (role, call) => (call === 3 ? ok(`cat x # ${CODEWORD}`) : chatter(role, call)),
+      {
+        signal: controller.signal,
+        write: async (event) => {
+          if (event.codeword) controller.abort();
+        },
+      },
+    );
+    expect(ending).toBe("found");
+    // No wait after the last message: the Session ends as it's written.
+    expect(endedAtMs).toBe(written.at(-1)!.atMs);
   });
 
   test("generation longer than the reveal shows as a pause, with no extra wait", async () => {

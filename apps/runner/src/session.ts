@@ -41,10 +41,23 @@ export function fillPrompt(template: string, codeword: string): string {
 // Resolves with the ending. A stop from outside (the signal) ends it as interrupted.
 // A failing write or spend update rejects, for the slot loop to record as interrupted.
 export async function runSession(setup: SessionSetup, deps: SessionDeps, signal: AbortSignal): Promise<Ending> {
+  // When the last message written is fully revealed in browsers, with the pacing slack.
+  const revealed = { atMs: 0 };
+  const ending = await converse(setup, deps, signal, revealed);
+  // The ending waits until the last message is revealed too (D66), unless the Session
+  // was stopped from outside: then nobody is there to see it.
+  const waitMs = revealed.atMs - deps.nowMs();
+  if (waitMs > 0 && !signal.aborted) await deps.sleep(waitMs, signal).catch(() => {});
+  return ending;
+}
+
+async function converse(
+  setup: SessionSetup,
+  deps: SessionDeps,
+  signal: AbortSignal,
+  revealed: { atMs: number },
+): Promise<Ending> {
   const history: { role: Role; text: string }[] = [];
-  // When the previous message is fully revealed in browsers, with the pacing slack;
-  // the next message is written no earlier.
-  let nextWriteAtMs = 0;
 
   try {
     for (let exchange = 1; exchange <= setup.exchangeCap; exchange++) {
@@ -53,7 +66,7 @@ export async function runSession(setup: SessionSetup, deps: SessionDeps, signal:
         if (answer.kind === "ending") return answer.ending;
         const text = answer.text;
 
-        const waitMs = nextWriteAtMs - deps.nowMs();
+        const waitMs = revealed.atMs - deps.nowMs();
         if (waitMs > 0) await deps.sleep(waitMs, signal);
         if (signal.aborted) return "interrupted";
 
@@ -65,7 +78,7 @@ export async function runSession(setup: SessionSetup, deps: SessionDeps, signal:
           ...(found ? { codeword: setup.codeword } : {}),
         });
         history.push({ role, text });
-        nextWriteAtMs = deps.nowMs() + (PACING_FACTOR * text.length * 1000) / setup.revealRateCharsPerSecond[role];
+        revealed.atMs = deps.nowMs() + (PACING_FACTOR * text.length * 1000) / setup.revealRateCharsPerSecond[role];
         if (found) return "found";
       }
     }

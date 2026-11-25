@@ -2,6 +2,7 @@
 // cut-off messages, OpenRouter's limit refusals, failures, timeouts and stopping.
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { callModel, createModelClient } from "./llm.ts";
+import type { Logger } from "./log.ts";
 
 // A fake for the provider: answers each request with the response a test sets.
 let requests: { headers: Headers; body: Record<string, unknown> }[] = [];
@@ -14,8 +15,11 @@ const provider = Bun.serve({
   },
 });
 afterAll(() => provider.stop(true));
+let warnings: { msg: string; fields?: Record<string, unknown> }[] = [];
+const log: Logger = { info: () => {}, warn: (msg, fields) => warnings.push({ msg, fields }), error: () => {} };
 beforeEach(() => {
   requests = [];
+  warnings = [];
 });
 
 const makeClient = (timeoutMs = 2_000) =>
@@ -28,6 +32,7 @@ const call = (options: { timeoutMs?: number; signal?: AbortSignal } = {}) =>
     maxTokens: 200,
     messages: [{ role: "user", content: "hello" }],
     signal: options.signal ?? new AbortController().signal,
+    log,
   });
 
 const answer = (content: string | null, finishReason = "stop", usage: object = { cost: 0.0012 }) =>
@@ -54,9 +59,26 @@ describe("callModel", () => {
     });
   });
 
-  test("counts a missing cost as 0, for providers that don't report one", async () => {
+  test("counts a missing cost as 0, for providers that don't report one, and warns, since the spend cap then can't work", async () => {
     respond = () => answer("pwd", "stop", {});
     expect(await call()).toMatchObject({ ok: true, costDollars: 0 });
+    expect(warnings).toEqual([{ msg: "model call reported no cost", fields: { model: "vendor/model" } }]);
+  });
+
+  test("a reported cost gives no warning", async () => {
+    respond = () => answer("pwd");
+    await call();
+    expect(warnings).toEqual([]);
+  });
+
+  test("an answer whose choice has no message is a failure to retry", async () => {
+    respond = () => Response.json({ id: "gen-1", choices: [{ index: 0, finish_reason: "error" }], usage: { cost: 0.0012 } });
+    expect(await call()).toMatchObject({ ok: false, reason: "failed", costDollars: 0.0012 });
+  });
+
+  test("an answer that ended with an error is a failure, even with some text", async () => {
+    respond = () => answer("ls -l", "error");
+    expect(await call()).toMatchObject({ ok: false, reason: "failed", errorMessage: expect.stringContaining("error"), costDollars: 0.0012 });
   });
 
   test("a message cut off at the length cap is kept, and marked", async () => {

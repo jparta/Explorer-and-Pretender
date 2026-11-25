@@ -240,7 +240,7 @@ The browser therefore knows the Codeword before typing the first character of th
 Text appears **character by character**, at a steady rate: 30 characters per second for the Explorer, 120 for the Pretender (S4.10), even though each message arrives whole.
 
 **On the runner's side:**
-- The runner writes a message only once 1.1 × (the previous message's characters ÷ its role's rate) has passed since it wrote the previous one.
+- The runner writes a message only once 1.1 × (the previous message's characters ÷ its role's rate) has passed since it wrote the previous one. It waits the same way after the last message before writing `session-end` (D66).
 - It generates the next message meanwhile, so generation is hidden whenever it takes less time than revealing the previous message. After a short message, such as a one-word command, it doesn't, and the wait shows as a pause before the next message. The multiplier, or a minimum pause, is to be tuned in trial runs so these waits feel even.
 
 The runner is therefore about 10% slower than the display, and no backlog builds up in the browser.

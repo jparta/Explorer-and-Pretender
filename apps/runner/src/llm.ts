@@ -1,6 +1,7 @@
 // One call to the model provider's chat completions API, through the openai package
 // (D13), not streamed (D31). Any OpenAI-compatible API works (S5.2).
 import OpenAI from "openai";
+import { log as defaultLog, type Logger } from "./log.ts";
 
 export type ChatMessage = OpenAI.Chat.ChatCompletionMessageParam;
 
@@ -33,6 +34,7 @@ export async function callModel(request: {
   maxTokens: number;
   messages: ChatMessage[];
   signal: AbortSignal;
+  log?: Logger;
 }): Promise<ModelResult> {
   let completion: OpenAI.Chat.ChatCompletion;
   try {
@@ -44,14 +46,18 @@ export async function callModel(request: {
     return toFailedResult(error);
   }
 
-  const costDollars = (completion.usage as OpenRouterUsage | undefined)?.cost ?? 0;
+  const reportedCostDollars = (completion.usage as OpenRouterUsage | undefined)?.cost;
+  // Without a cost, the spend cap can't work (S6.1), so it's worth a warning.
+  if (reportedCostDollars === undefined) (request.log ?? defaultLog).warn("model call reported no cost", { model: request.model });
+  const costDollars = reportedCostDollars ?? 0;
   // Some provider errors arrive as a 200 response without choices.
   const choice = completion.choices?.[0];
 
-  const text = choice?.message.content ?? "";
+  const text = choice?.message?.content ?? "";
   // An empty answer, even one cut off at the cap (a reasoning model can spend the whole
-  // cap on reasoning), is a failure to retry; it may still have cost money.
-  if (text === "") {
+  // cap on reasoning), is a failure to retry; it may still have cost money. So is an
+  // answer the provider ended with an error, whatever text it got before that.
+  if (text === "" || choice?.finish_reason === ("error" as string)) {
     return { ok: false, reason: "failed", errorMessage: `empty answer (finish_reason ${choice?.finish_reason})`, costDollars };
   }
   return { ok: true, text, costDollars, wasCutOff: choice?.finish_reason === "length" };
