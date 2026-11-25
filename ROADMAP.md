@@ -15,6 +15,7 @@
 - [ ] Traffic enters through the Gateway API
 - [ ] A scripted stand-in model runs the exhibition without an API key
 - [ ] A Session survives a restart of its Job's pod: it resumes where it was instead of being interrupted
+- [ ] Writes that belong together go to Valkey as one transaction (`MULTI`/`EXEC`), such as `session-start` with its expiry, so a crash between them can't leave half of it
 
 ## Phase 3 — Public, in the cloud
 
