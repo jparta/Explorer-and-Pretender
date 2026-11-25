@@ -3,7 +3,7 @@
 // each Session. Tested end to end in runner.test.ts.
 import { setTimeout as sleepUnlessAborted } from "node:timers/promises";
 import type OpenAI from "openai";
-import { type Role, utcDate } from "@exhibition/shared";
+import { utcDate } from "@exhibition/shared";
 import { makeCodeword, type WordLists } from "./codeword.ts";
 import type { RunnerConfig } from "./config.ts";
 import { callModel } from "./llm.ts";
@@ -38,7 +38,6 @@ export function makeRunSession(options: {
 }): RunSession {
   const { config, modelClient, store, prompts, words } = options;
   const log = options.log ?? defaultLog;
-  const models: Record<Role, string> = { explorer: config.explorerModel, pretender: config.pretenderModel };
 
   return (slotIndex, sessionId, signal) => {
     const codeword = makeCodeword(words);
@@ -58,7 +57,7 @@ export function makeRunSession(options: {
         callModel: async (role, messages, signal) => {
           const result = await callModel({
             client: modelClient,
-            model: models[role],
+            model: config.model[role],
             maxTokens: config.maxMessageTokens,
             reasoningEffort: config.reasoningEffort[role],
             messages,

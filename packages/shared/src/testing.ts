@@ -79,7 +79,7 @@ async function connect(url: string): Promise<RedisClient> {
   for (let attempt = 0; ; attempt++) {
     const client = new RedisClient(url, { autoReconnect: false });
     try {
-      await client.send("PING", []);
+      await client.ping();
       return client;
     } catch (error) {
       client.close();

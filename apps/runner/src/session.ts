@@ -44,33 +44,29 @@ export function fillPrompt(template: string, codeword: string): string {
 // Resolves with the ending. A stop from outside (the signal) ends it as interrupted.
 // A failing write or spend update rejects, for the slot loop to record as interrupted.
 export async function runSession(setup: SessionSetup, deps: SessionDeps, signal: AbortSignal): Promise<Ending> {
-  // When the last message written is fully revealed in browsers, with the pacing slack.
-  const revealed = { atMs: 0 };
-  const ending = await converse(setup, deps, signal, revealed);
-  // The ending waits until the last message is revealed too (D66), unless the Session
-  // was stopped from outside: then nobody is there to see it.
-  const waitMs = revealed.atMs - deps.nowMs();
-  if (waitMs > 0 && !signal.aborted) await deps.sleep(waitMs, signal).catch(() => {});
-  return ending;
-}
-
-async function converse(
-  setup: SessionSetup,
-  deps: SessionDeps,
-  signal: AbortSignal,
-  revealed: { atMs: number },
-): Promise<Ending> {
   const history: HistoryEntry[] = [];
+  // When the last message written is fully revealed in browsers, with the pacing slack.
+  // Each message, and the ending too (D66), waits until then.
+  let revealedAtMs = 0;
+  const waitUntilRevealed = async () => {
+    const waitMs = revealedAtMs - deps.nowMs();
+    if (waitMs > 0) await deps.sleep(waitMs, signal);
+  };
+  // The ending waits for the last reveal, unless the Session was stopped from outside:
+  // then nobody is there to see it, and it ends at once with the ending it had.
+  const end = async (ending: Ending): Promise<Ending> => {
+    if (!signal.aborted) await waitUntilRevealed().catch(() => {});
+    return ending;
+  };
 
   try {
     for (let exchange = 1; exchange <= setup.exchangeCap; exchange++) {
       for (const role of ["explorer", "pretender"] as const) {
         const answer = await callModelWithRetries(role, contextFor(role, setup, history), setup, deps, signal);
-        if (answer.kind === "ending") return answer.ending;
+        if (answer.kind === "ending") return end(answer.ending);
         const text = answer.text;
 
-        const waitMs = revealed.atMs - deps.nowMs();
-        if (waitMs > 0) await deps.sleep(waitMs, signal);
+        await waitUntilRevealed();
         if (signal.aborted) return "interrupted";
 
         const found = role === "explorer" && text.includes(setup.codeword);
@@ -81,11 +77,11 @@ async function converse(
           ...(found ? { codeword: setup.codeword } : {}),
         });
         history.push({ role, text });
-        revealed.atMs = deps.nowMs() + (PACING_FACTOR * text.length * 1000) / setup.revealRateCharsPerSecond[role];
-        if (found) return "found";
+        revealedAtMs = deps.nowMs() + (PACING_FACTOR * text.length * 1000) / setup.revealRateCharsPerSecond[role];
+        if (found) return end("found");
       }
     }
-    return "ran-its-course";
+    return end("ran-its-course");
   } catch (error) {
     if (signal.aborted) return "interrupted";
     throw error;

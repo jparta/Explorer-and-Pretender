@@ -7,7 +7,7 @@ const StreamEvent = z.union([SessionEvent, SlotStatesEvent]);
 
 // A stream's events, oldest first. An entry that doesn't match its schema fails the test.
 export async function readStreamEvents(client: RedisClient, key: string): Promise<z.infer<typeof StreamEvent>[]> {
-  const reply = (await client.send("XRANGE", [key, "-", "+"])) as [string, string[]][];
+  const reply = await client.xrange(key, "-", "+");
   return reply.map(([id, fields]) => {
     const decoded = fromStreamFields(StreamEvent, fields);
     if (!decoded.ok) throw new Error(`${key} ${id}: ${decoded.error}`);

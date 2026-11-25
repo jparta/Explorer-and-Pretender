@@ -101,7 +101,7 @@ async function startRunner() {
 
   log.info("runner started", {
     slots: config.slotCount,
-    models: { explorer: config.explorerModel, pretender: config.pretenderModel },
+    models: config.model,
   });
   loopsStarted = true;
   for (let slotIndex = 0; slotIndex < config.slotCount; slotIndex++) {

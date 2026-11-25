@@ -270,19 +270,21 @@ export class SlotLoops {
   // Every change of a slot's state goes through here: it sets the state in memory, logs
   // it, and has every slot's state written to Valkey. Resolves once Valkey has it; starting a
   // Session waits for that (start-up and shutdown wait for the writer too). Other changes
-  // don't, so a write that keeps failing
-  // doesn't hold up stopping a Session nobody watches, or recording an ending.
+  // don't, so a write that keeps failing doesn't hold up stopping a Session nobody
+  // watches, or recording an ending.
   private setSlotState(slotIndex: number, nextState: Slot): Promise<void> {
     this.slotStates[slotIndex] = nextState;
-    const sessionId = nextState.state === "running" || nextState.state === "intermission" ? nextState.sessionId : undefined;
-    this.log.info(`slot ${nextState.state}`, { slot: slotIndex, sessionId }); // JSON leaves out an unset sessionId
+    this.log.info(`slot ${nextState.state}`, { slot: slotIndex, sessionId: sessionIdOf(nextState) }); // JSON leaves out an unset sessionId
     return this.slotStatesWriter.writeChange();
   }
 
   private slotStatesForValkey(): SlotStateWithSession[] {
-    return this.slotStates.map((slot) => {
-      const sessionId = slot.state === "running" || slot.state === "intermission" ? slot.sessionId : undefined;
-      return { state: slot.state, sessionId }; // JSON leaves out an unset sessionId
-    });
+    // JSON leaves out an unset sessionId.
+    return this.slotStates.map((slot) => ({ state: slot.state, sessionId: sessionIdOf(slot) }));
   }
+}
+
+// The slot's Session: set while it runs and during the intermission after it.
+function sessionIdOf(slot: Slot): string | undefined {
+  return slot.state === "running" || slot.state === "intermission" ? slot.sessionId : undefined;
 }

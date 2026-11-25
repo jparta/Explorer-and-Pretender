@@ -54,7 +54,7 @@ try {
   const sessionId = crypto.randomUUID();
   const startedAtMs = Date.now();
   console.log(
-    `Live Session: exchange cap ${config.exchangeCap}, models ${config.explorerModel} / ${config.pretenderModel}, ` +
+    `Live Session: exchange cap ${config.exchangeCap}, models ${config.model.explorer} / ${config.model.pretender}, ` +
       `reasoning effort ${config.reasoningEffort.explorer} / ${config.reasoningEffort.pretender}`,
   );
   await store.startSession(sessionId, 0);
