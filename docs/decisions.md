@@ -652,3 +652,11 @@ The kubelet's probes still get in: Kubernetes lets traffic from a pod's own node
 **Alternatives:** Biome's formatter, as D61 planned, in its default or in a style matched to the existing code (2 spaces, 120-character lines, double quotes); another formatter, such as `bun fmt`.
 
 **Why:** Biome's formatting didn't make the code more readable: it removed the spaces that lined up comments, and split some lines into several and joined others into one without a clear pattern. It also reformatted the Markdown docs and the YAML manifests, changing the italics and padding the tables. Cost: nothing keeps the layout consistent, so it depends on writing carefully.
+
+## D68 — A Session stream expires a day after it starts, unless its ending shortens that
+
+**Decision:** When the runner writes `session-start`, it gives the Session's stream an expiry of one day. Writing `session-end` then shortens it to 60 s (D19), as before. A stream whose ending is never written, for example because the runner restarted before any slot showed the Session, so no runner knows to end it, expires on its own.
+
+**Alternatives:** Accepting such streams, which then stay in Valkey for good; a scheduled clean-up of streams left without an end or expiry, planned for Phase 4.
+
+**Why:** The expiry keeps Sessions clean in a straightforward way, and it makes the scheduled clean-up unnecessary. A Session can't last a day, since the exchange cap ends it far sooner, so the expiry never cuts a running one short.
