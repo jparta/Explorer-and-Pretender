@@ -9,7 +9,7 @@ import { errorFields, log as defaultLog, type Logger } from "./log.ts";
 import { SlotStatesWriter } from "./slot-states-writer.ts";
 import type { ValkeyStore } from "./store.ts";
 
-export type RunSession = (slot: number, sessionId: string, signal: AbortSignal) => Promise<Ending>;
+export type RunSession = (slotIndex: number, sessionId: string, signal: AbortSignal) => Promise<Ending>;
 
 export type SlotLoopsOptions = {
   store: ValkeyStore;

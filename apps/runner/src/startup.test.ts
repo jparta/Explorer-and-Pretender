@@ -18,7 +18,7 @@ test("a refused ping is tried again only after a pause, not at once", async () =
       retryPauseMs: 1_000,
       log,
       // The answer timeouts never run out here: each ping settles at once.
-      sleepMs: async (ms) => {
+      sleep: async (ms) => {
         if (ms !== 1_000) return new Promise(() => {});
         pausesMs.push(ms);
       },

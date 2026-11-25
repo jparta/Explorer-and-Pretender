@@ -80,7 +80,7 @@ describe("callModel", () => {
 
   test("an answer that ended with an error is a failure, even with some text", async () => {
     respond = () => answer("ls -l", "error");
-    expect(await call()).toMatchObject({ ok: false, reason: "failed", errorMessage: expect.stringContaining("error"), costDollars: 0.0012 });
+    expect(await call()).toMatchObject({ ok: false, reason: "failed", errorMessage: "the provider ended the answer with an error (finish_reason error)", costDollars: 0.0012 });
   });
 
   test("a message cut off at the length cap is kept, and marked", async () => {

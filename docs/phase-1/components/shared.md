@@ -76,7 +76,7 @@ Only the settings that more than one component reads are here. The rest are sett
 | Reveal rate, Explorer | `REVEAL_RATE_EXPLORER_CHARS_PER_SECOND` | runner (pacing), front end (typing, through web) |
 | Reveal rate, Pretender | `REVEAL_RATE_PRETENDER_CHARS_PER_SECOND` | the same |
 
-The values start as the spec's starting values and live only in one ConfigMap, `settings`, generated in `deploy/base/kustomization.yaml` (D45), sets them as environment variables, and both components load it, so the values can't differ between them. The schema, `SharedEnvironment`, is exported too: a component extends it with its own settings and checks everything at once, so one error names every invalid variable, its own and the shared ones.
+The values start as the spec's starting values and live only in one ConfigMap, `settings`, generated in `deploy/base/kustomization.yaml` (D45). It sets them as environment variables, and both components load it, so the values can't differ between them. The schema, `SharedEnvironment`, is exported too: a component extends it with its own settings and checks everything at once, so one error names every invalid variable, its own and the shared ones.
 
 **The slot count isn't here,** though both sides need it: it's the runner's setting, and the web server learns it as the length of the slot states list in the `slots` stream (D65). Two components reading the same setting could disagree for a moment, since a change restarts them one after the other.
 

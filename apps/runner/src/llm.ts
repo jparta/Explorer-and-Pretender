@@ -78,7 +78,10 @@ export async function callModel(request: {
   // An empty answer, even one cut off at the cap (a reasoning model can spend the whole
   // cap on reasoning), is a failure to retry; it may still have cost money. So is an
   // answer the provider ended with an error, whatever text it got before that.
-  if (text === "" || choice?.finish_reason === ("error" as string)) {
+  if (choice?.finish_reason === ("error" as string)) {
+    return { ok: false, reason: "failed", errorMessage: "the provider ended the answer with an error (finish_reason error)", costDollars };
+  }
+  if (text === "") {
     return { ok: false, reason: "failed", errorMessage: `empty answer (finish_reason ${choice?.finish_reason})`, costDollars };
   }
   return { ok: true, text, costDollars, wasCutOff: choice?.finish_reason === "length" };

@@ -40,10 +40,10 @@ export function makeRunSession(options: {
   const log = options.log ?? defaultLog;
   const models: Record<Role, string> = { explorer: config.explorerModel, pretender: config.pretenderModel };
 
-  return (slot, sessionId, signal) => {
+  return (slotIndex, sessionId, signal) => {
     const codeword = makeCodeword(words);
     // Logged for debugging, such as checking why a Session did or didn't end as found.
-    log.info("Codeword chosen", { slot, sessionId, codeword });
+    log.info("Codeword chosen", { slot: slotIndex, sessionId, codeword });
     return runSession(
       {
         codeword,
@@ -65,16 +65,16 @@ export function makeRunSession(options: {
             signal,
           });
           if (!result.ok && !signal.aborted) {
-            log.warn("model call failed", { slot, sessionId, role, reason: result.reason, error: result.errorMessage });
+            log.warn("model call failed", { slot: slotIndex, sessionId, role, reason: result.reason, error: result.errorMessage });
           }
-          if (result.ok && result.wasCutOff) log.info("message cut off at the length cap", { slot, sessionId, role });
+          if (result.ok && result.wasCutOff) log.info("message cut off at the length cap", { slot: slotIndex, sessionId, role });
           return result;
         },
         write: (event) => store.writeEvent(sessionId, event),
         // Each call's cost and the day's total go to the logs (S6.5).
         addSpend: async (costDollars) => {
           const spendTodayDollars = await store.addSpend(utcDate(), costDollars);
-          log.info("call cost", { slot, sessionId, costDollars, spendTodayDollars });
+          log.info("call cost", { slot: slotIndex, sessionId, costDollars, spendTodayDollars });
         },
         nowMs: Date.now,
         sleep: abortableSleep,

@@ -62,8 +62,8 @@ export class ValkeyStore {
 
   // Writes session-start and gives the stream a day to live, so it goes away even if its
   // ending is never written (D68).
-  async startSession(sessionId: string, slot: number): Promise<void> {
-    await this.writeEvent(sessionId, { type: "session-start", sessionId, slot, kind: "terminal" });
+  async startSession(sessionId: string, slotIndex: number): Promise<void> {
+    await this.writeEvent(sessionId, { type: "session-start", sessionId, slot: slotIndex, kind: "terminal" });
     await this.client.send("EXPIRE", [sessionKey(sessionId), String(UNENDED_SESSION_EXPIRE_SECONDS)]);
   }
 
@@ -120,8 +120,8 @@ export class ValkeyStore {
     return this.exists(PRESENCE_KEY);
   }
 
-  async isWatched(slot: number): Promise<boolean> {
-    return this.exists(watchingKey(slot));
+  async isWatched(slotIndex: number): Promise<boolean> {
+    return this.exists(watchingKey(slotIndex));
   }
 
   // The day's spend in dollars; a day without a key counts as 0 (architecture 8).

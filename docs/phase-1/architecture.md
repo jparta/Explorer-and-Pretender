@@ -59,7 +59,7 @@ The front end lives inside `apps/web`, because the web server serves it (D20) an
 | `session:{id}` | Stream | runner | web | The Session's events (§4.1), in order | Expires 1 minute after the Session ends (D19), or a day after it starts if its ending is never written (D68). Limited to 10,000 entries as a safety net |
 | `slots` | Stream | runner | web | Every slot's state, one entry each time one changes (§4.2). The last entry is the current state of every slot (D65) | Trimmed to the last 1,000 entries |
 | `presence` | String | web | runner | Exists as long as any viewer is present | Expires 30 s after the last heartbeat (S2.7) |
-| `watching:{n}` | String | web | runner | Exists as long as someone watches slot *n* | Expires 10 s after the last heartbeat |
+| `watching:{n}` | String | web | runner | Exists as long as someone watches the slot whose index is *n* | Expires 10 s after the last heartbeat |
 | `spend:{date}` | String (number) | runner | runner | The day's spend in dollars (D11), with the date in UTC | Expires after 2 days |
 | `sleeping:{date}` | String | runner | runner | Set when the provider refuses a call because the key's daily limit (S6.2) or the prepaid credit (D59) is spent | Expires after 2 days |
 
