@@ -8,7 +8,7 @@ import { startValkey } from "@exhibition/shared/testing";
 import { loadWordLists } from "../src/codeword.ts";
 import { loadRunnerConfig } from "../src/config.ts";
 import { createModelClient, MODEL_CALL_TIMEOUT_MS } from "../src/llm.ts";
-import { createSessionRunner, loadPrompts } from "../src/runner.ts";
+import { makeRunSession, loadPrompts } from "../src/runner.ts";
 import { connectValkey, ValkeyStore } from "../src/store.ts";
 import { readStreamEvents } from "../src/valkey-test-helpers.ts";
 
@@ -43,7 +43,7 @@ try {
     REVEAL_RATE_PRETENDER_CHARS_PER_SECOND: "1000000",
   });
   const store = new ValkeyStore(valkeyClient);
-  const runSession = createSessionRunner({
+  const runSession = makeRunSession({
     config,
     modelClient: createModelClient({ baseUrl: config.llmBaseUrl, apiKey, timeoutMs: MODEL_CALL_TIMEOUT_MS }),
     store,

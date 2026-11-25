@@ -10,7 +10,7 @@ import { startValkey, type TestValkey } from "@exhibition/shared/testing";
 import { loadWordLists } from "./codeword.ts";
 import { loadRunnerConfig } from "./config.ts";
 import { createModelClient } from "./llm.ts";
-import { abortableSleep, createSessionRunner, loadPrompts } from "./runner.ts";
+import { abortableSleep, makeRunSession, loadPrompts } from "./runner.ts";
 import { SlotLoops } from "./slots.ts";
 import { connectValkey, ValkeyStore } from "./store.ts";
 import { readStreamEvents } from "./valkey-test-helpers.ts";
@@ -83,7 +83,7 @@ test("a watched slot runs a Session until the Explorer finds the Codeword", asyn
     dailySpendCapDollars: config.dailySpendCapDollars,
     slotStatesRetryPauseMs: 100,
     nowMs: Date.now,
-    runSession: createSessionRunner({
+    runSession: makeRunSession({
       config,
       modelClient: createModelClient({ baseUrl: config.llmBaseUrl, apiKey: "sk-test", timeoutMs: 5_000 }),
       store,

@@ -28,7 +28,7 @@ export async function loadPrompts(dir: URL = promptsDir): Promise<Prompts> {
   };
 }
 
-export function createSessionRunner(options: {
+export function makeRunSession(options: {
   config: RunnerConfig;
   modelClient: OpenAI;
   store: ValkeyStore;

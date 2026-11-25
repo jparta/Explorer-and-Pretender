@@ -6,7 +6,7 @@ import { loadRunnerConfig, readSecretFile } from "./config.ts";
 import { isAlive, startHealthServer } from "./health.ts";
 import { createModelClient, MODEL_CALL_TIMEOUT_MS } from "./llm.ts";
 import { describeError, errorFields, log } from "./log.ts";
-import { createSessionRunner, loadPrompts } from "./runner.ts";
+import { makeRunSession, loadPrompts } from "./runner.ts";
 import { SlotLoops } from "./slots.ts";
 import { waitUntilValkeyAnswers } from "./startup.ts";
 import { connectValkey, ValkeyStore } from "./store.ts";
@@ -46,7 +46,7 @@ async function startRunner() {
     dailySpendCapDollars: config.dailySpendCapDollars,
     slotStatesRetryPauseMs: SLOT_STATES_RETRY_PAUSE_MS,
     nowMs: Date.now,
-    runSession: createSessionRunner({
+    runSession: makeRunSession({
       config,
       modelClient: createModelClient({ baseUrl: config.llmBaseUrl, apiKey, timeoutMs: MODEL_CALL_TIMEOUT_MS }),
       store,
