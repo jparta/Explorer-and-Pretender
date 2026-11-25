@@ -24,7 +24,7 @@ Direction for the viewing page, gathered from mood-board reviews. Behaviour live
 ## Mockup content
 
 - The Explorer is given no commands, so it doesn't use a `say` command. When it has found the Codeword it simply says it, in whatever form it decides.
-- With almost no context, the Explorer opens unsure ("Hello?"), gets its bearings, and only then reveals what it is looking for (for example, "Something here must be the Secret").
+- With almost no context, the Explorer opens unsure ("Hello?"), gets its bearings, and only then reveals what it is looking for (for example, "Something here must be the Codeword").
 
 ## A style per kind of Pretender
 

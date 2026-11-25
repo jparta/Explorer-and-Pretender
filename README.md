@@ -50,3 +50,23 @@ kubectl rollout restart deployment/runner -n exhibition
 ```
 
 To remove the cluster and the registry again: `ctlptl delete -f cluster.yaml`.
+
+## Running the checks
+
+From the repository root, once:
+
+```
+bun install
+```
+
+Then, before handing over a change:
+
+```
+bun run check:all
+```
+
+- **`bun run check:all`** runs every check in turn, stopping at the first that fails: the tests, the type check, Biome (D61) and the link check. Each can also be run on its own, as `bun test`, `bun run check`, `bun run lint` and `bun run check:links`.
+- **`bun test`** runs every `*.test.ts` file in the repository. Many tests start a throwaway Valkey container, so Docker must be running.
+- **`bun run check`** runs the TypeScript compiler without producing output (`tsc --noEmit`). Bun runs TypeScript by removing the types without checking them, so type errors show only here and in the editor.
+- **`bun run lint`** runs Biome's linter (D61), which reports likely mistakes. Biome doesn't format the code (D67). In test files the rule against `!` (telling TypeScript a value can't be missing) is off, since a wrong `!` there makes the test fail loudly anyway.
+- **`bun run check:links`** checks the links in every Markdown file, headings included, with lychee in Docker.

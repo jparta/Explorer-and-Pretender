@@ -94,32 +94,15 @@ The values start as the spec's starting values and live only in one ConfigMap, `
 
 Each setting is one more value to check, document and keep in a ConfigMap, so a value becomes a setting only when tuning it is likely.
 
-## 5. Running the checks
+## 5. Tests
 
-From the repository root:
-
-```bash
-bun install
-```
-
-```bash
-bun test
-```
-
-```bash
-bun run check:all
-```
-
-- **`bun run check:all`** runs every check in turn, stopping at the first that fails: the tests, the type check, Biome (D61) and the link check. Each can also be run on its own, as `bun test`, `bun run check`, `bun run lint` and `bun run check:links`.
-- **`bun test`** runs every `*.test.ts` file in the repository. The user-list test (§3) needs Docker running; it starts its container and removes it again, in about two seconds. Starting that container is in `src/testing.ts`, which the runner's and web server's tests use too, imported as `@exhibition/shared/testing`.
-- **`bun run check`** runs the TypeScript compiler without producing output (`tsc --noEmit`). Bun runs TypeScript by removing the types without checking them, so type errors show only here and in the editor.
-- **`bun run lint`** runs Biome's linter (D61), which reports likely mistakes. Biome doesn't format the code. In test files the rule against `!` (telling TypeScript a value can't be missing) is off, since a wrong `!` there makes the test fail loudly anyway.
+How to run the checks is in the [README](../../../README.md#running-the-checks). The user-list test (§3) needs Docker running; it starts its container and removes it again, in about two seconds. Starting that container is in `src/testing.ts`, which the runner's and web server's tests use too, imported as `@exhibition/shared/testing`.
 
 The tests cover:
 
 - **events:** every event type survives a trip to a stream entry and back; a wrong shape, broken JSON or a missing `event` field comes back as an error result;
 - **keys:** the date at either side of midnight UTC, and the user list (§3);
-- **settings:** starting with no environment, values from the environment, unrelated variables ignored, each kind of invalid value refused, and one error naming every invalid variable.
+- **settings:** values from the environment, unrelated variables ignored, a missing setting refused, each kind of invalid value refused, and one error naming every missing or invalid variable.
 
 ## Sources
 
