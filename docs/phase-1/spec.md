@@ -14,21 +14,21 @@ What must be true when Phase 1 is done. Each requirement can be checked from the
 
 - **S2.1** There are 3 slots. Each slot shows at most one Session at a time.
 - **S2.2** A Session alternates messages: the Explorer writes, the Pretender answers as a terminal would. The Explorer goes first.
-- **S2.3** *Found:* the Session ends when an Explorer message contains the Secret exactly as given.
-- **S2.4** *Ran its course:* the Session ends after 15 exchanges without the Secret being found.
+- **S2.3** *Found:* the Session ends when an Explorer message contains the Codeword exactly as given.
+- **S2.4** *Ran its course:* the Session ends after 15 exchanges without the Codeword being found.
 - **S2.5** *Interrupted:* if the model provider keeps failing, the Session ends as interrupted.
 - **S2.6** A Session starts in a slot only when someone is watching that slot and it is idle.
 - **S2.7** A running Session continues while any viewer is present, whichever slot they are watching. If no viewer is present for 30 seconds, it stops.
 - **S2.8** After a Session ends, the slot has an intermission (10 seconds). Then, if someone is watching the slot, the next Session starts; otherwise the slot is idle.
 - **S2.9** A finished Session can't be viewed again.
 
-## 3. The Secret
+## 3. The Codeword
 
-- **S3.1** Each Session gets a new Secret of the form adjective-noun-verb-adverb, e.g. `velvet-otter-hums-quietly`.
-- **S3.2** Secrets contain no offensive words.
-- **S3.3** Only the Pretender is given the Secret.
+- **S3.1** Each Session gets a new Codeword of the form adjective-noun-verb, e.g. `verbose-keepalive-hibernates`.
+- **S3.2** Codewords contain no offensive words.
+- **S3.3** Only the Pretender is given the Codeword.
 - **S3.4** Viewers never see the instructions given to either model. They discover what is happening by watching.
-- **S3.5** The exhibition never reveals the Secret itself. Viewers see it only if it appears in the Session.
+- **S3.5** The exhibition never reveals the Codeword itself. Viewers see it only if it appears in the Session.
 
 ## 4. Viewing
 
@@ -54,9 +54,9 @@ What must be true when Phase 1 is done. Each requirement can be checked from the
 
 **Endings**
 
-- **S4.15** *Found:* as the Explorer types the Secret, it shimmers gold, the shimmer growing with each character. In step, the same characters light up wherever the Secret appeared earlier in the Pretender's output. The shimmer stays as long as the Secret is on screen.
+- **S4.15** *Found:* as the Explorer types the Codeword, it shimmers gold, the shimmer growing with each character. In step, the same characters light up wherever the Codeword appeared earlier in the Pretender's output. The shimmer stays as long as the Codeword is on screen.
 - **S4.16** *Ran its course* and *interrupted* are shown in a grey box, distinct from the message boxes, horizontally centred directly below the last message and scrolling with the chat. The box says why the Session ended: "This Session has run its course" or "This Session was unexpectedly interrupted".
-- **S4.17** After the Secret is found, the shimmer lingers, then the slot fades to black in a few discrete steps, like old adventure games, before the next Session starts. The other two endings fade the same way, once the grey box has been readable for a moment.
+- **S4.17** After the Codeword is found, the shimmer lingers, then the slot fades to black in a few discrete steps, like old adventure games, before the next Session starts. The other two endings fade the same way, once the grey box has been readable for a moment.
 
 ## 5. Constraints
 
@@ -68,7 +68,7 @@ What must be true when Phase 1 is done. Each requirement can be checked from the
 ## 6. Cost limits
 
 - **S6.1** Daily spend cap: $2, counted by the exhibition from the cost the provider reports for each call. The count resets at midnight UTC.
-- **S6.2** When the cap is reached, the machine sleeps until the day resets: no new Sessions start, and Sessions already running finish. Once a slot has nothing running, it shows a notice saying "Machine is sleeping, come back tomorrow" in place of the waiting state. If the provider's key limit (S6.3) is reached first, a running Session cannot continue: it stops, and the same notice appears below its last message. The notice is friendlier than the grey ending box, looks the way the slot's style dictates, and stays until the day resets, without fading.
+- **S6.2** When the cap is reached, the machine sleeps until the day resets: no new Sessions start, and Sessions already running finish. Once a slot has nothing running, it shows a notice saying "Machine is sleeping, come back tomorrow" in place of the waiting state. If the provider's key limit (S6.3) is reached first, or the prepaid credit (S6.4) runs out, a running Session cannot continue: it stops, and the same notice appears below its last message. The notice is friendlier than the grey ending box, looks the way the slot's style dictates, and stays until the day resets, without fading.
 - **S6.3** The API key also has a daily limit at the provider, 10% above the cap, as a backstop in case the exhibition's count goes wrong. The margin leaves room for running Sessions to finish after the cap is reached.
 - **S6.4** The provider account runs on prepaid credit without automatic top-up, so the balance is the absolute ceiling.
 - **S6.5** Each call's reported cost and the day's running total show in the logs.

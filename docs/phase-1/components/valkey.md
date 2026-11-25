@@ -1,6 +1,6 @@
 # Valkey
 
-Valkey is the store that the runner and the web server share (D3, D18). It holds every key in the architecture's Valkey contract (architecture §3): the Session streams, the `slots` stream, the `slot:{n}` hashes, presence and watching keys, and the day's spend. This component is only configuration and Kubernetes manifests: we run the official Valkey image and write no code for it.
+Valkey is the store that the runner and the web server share (D3, D18). It holds every key in the architecture's Valkey contract (architecture §3): the Session streams, the `slots` stream, the `slot:{n}` hashes and the slot count, presence and watching keys, and the day's spend and sleeping marker. This component is only configuration and Kubernetes manifests: we run the official Valkey image and write no code for it.
 
 ## 1. What runs
 
@@ -138,8 +138,8 @@ Each component logs in as its own Valkey user, allowed only what it needs (D46),
 
 ```
 user default off
-user runner on ~session:* ~slots ~slot:* ~spend:* ~sleeping:* %R~presence %R~watching:* +xadd +expire +hset +get +set +incrbyfloat +exists +ping
-user web on %R~session:* %R~slots %R~slot:* ~presence ~watching:* +xread +xrange +xrevrange +hgetall +set +ping
+user runner on ~session:* ~slots ~slot:* ~slot-count ~spend:* ~sleeping:* %R~presence %R~watching:* +xadd +xrevrange +expire +hset +hgetall +del +get +set +incrbyfloat +exists +ping
+user web on %R~session:* %R~slots %R~slot:* %R~slot-count ~presence ~watching:* +xread +xrange +xrevrange +hgetall +get +set +ping
 user probe on nopass +ping
 user admin on ~* &* +@all
 ```
@@ -150,7 +150,7 @@ user admin on ~* &* +@all
 - `probe` needs no password (`nopass`), since it can only run `PING`. `valkey-cli` still has to send one to log in as a named user; with `nopass` any value is accepted, so the probe sends `probe`. Tested: without `--pass`, `valkey-cli` doesn't log in at all and gets `NOAUTH`, again with exit code 0. The health check becomes `valkey-cli --no-auth-warning --user probe --pass probe ping | grep -q PONG`.
 - `admin` may do anything. It's for people, debugging with `kubectl exec`, and no component uses it. Locally its password is in `deploy/overlays/local/` (D49).
 
-The exact command lists are settled when the runner and web server are written, since they have to match what each one's code does. Tests that run a component against a real Valkey with this user list catch a missing permission.
+Each command list matches what that component's code does: the runner's is settled ([runner component doc §2.4](runner.md#24-reading-and-writing-valkey)), the web server's is settled when it is written. Tests that run a component against a real Valkey with this user list catch a missing permission.
 
 ### 6.1 Where the passwords come from
 

@@ -8,7 +8,7 @@ Direction for the viewing page, gathered from mood-board reviews. Behaviour live
 - **Two characters, neither of them the viewer.** The Explorer is on the left, the Pretender on the right, and they stay there. The self is traditionally on the right in a chat; putting the Explorer on the left keeps it a protagonist we empathise with without making it "me".
 - **Equal weight.** Both message boxes have the same contrast against the background. They differ a little (for example in tint), never so much that one looks like a different kind of thing.
 - **The Explorer's motivation is discovered too.** Viewers never see its instructions, so what it wants comes out only through what it does and says.
-- **The Secret's shimmer never costs readability, and it is the same in every style.** A gold sheen passes behind the letters; the text colour itself stays solid. It means the same thing everywhere, so it looks the same everywhere.
+- **The Codeword's shimmer never costs readability, and it is the same in every style.** A gold sheen passes behind the letters; the text colour itself stays solid. It means the same thing everywhere, so it looks the same everywhere.
 - **Slots are cards.** The slot in focus is a card on the page, just like the neighbouring slots that peek in at the edges.
 - **The page is neutral.** The page around the cards belongs to no style, because slots of different kinds sit side by side. Only the cards are themed. It is white or near-white, with clear contrast against every card; a pale grey page made the card disappear.
 
@@ -23,7 +23,7 @@ Direction for the viewing page, gathered from mood-board reviews. Behaviour live
 
 ## Mockup content
 
-- The Explorer is given no commands, so it doesn't use a `say` command. When it has found the Secret it simply says it, in whatever form it decides.
+- The Explorer is given no commands, so it doesn't use a `say` command. When it has found the Codeword it simply says it, in whatever form it decides.
 - With almost no context, the Explorer opens unsure ("Hello?"), gets its bearings, and only then reveals what it is looking for (for example, "Something here must be the Secret").
 
 ## A style per kind of Pretender
@@ -41,7 +41,7 @@ The exact values live in static mockups, one per kind: [terminal](mockups/termin
 - Flat cards of equal weight (Typewriter).
 - Earthy linen tones over the yellow and green tints tried later.
 - Rounded corners and the Prussian-blue palette (Cyanotype), without shadows.
-- The typewriter sheen on the Secret: distinctive, and the text colour doesn't change. Contrast stays high.
+- The typewriter sheen on the Codeword: distinctive, and the text colour doesn't change. Contrast stays high.
 - Distinct per-character colours (Neon outline), though the neon direction itself was dropped.
 
 ## Directions

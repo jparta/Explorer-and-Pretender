@@ -10,6 +10,7 @@ The other workspaces import it as `@exhibition/shared`. Bun runs TypeScript dire
 |---|---|---|
 | `src/events.ts` | The event types of architecture §4, as schemas, and the functions that turn an event into a stream entry and back | runner (writes), web (reads), front end (reads the SSE data) |
 | `src/keys.ts` | The key names, expiry times and stream lengths of architecture §3, and the UTC date used in `spend:{date}` and `sleeping:{date}` | runner, web |
+| `src/testing.ts` | For tests only: a throwaway Valkey container with the cluster's image and user list (§5). Needs Docker | the runner's and web server's tests, and `keys.test.ts` |
 | `src/settings.ts` | The settings of spec §7 that more than one component reads, loaded from environment variables | runner, web |
 
 ## 2. Events
@@ -32,7 +33,7 @@ A Valkey stream entry is a list of field-value pairs. Each entry here has a sing
 XADD session:9f2c * event {"type":"message","role":"explorer","text":"ls -la"}
 ```
 
-One JSON field keeps nested and optional fields simple, such as `secret` on a message, and the same text can go to the browser as the SSE `data:` unchanged. `toStreamFields` and `fromStreamFields` do the conversion, so the field name lives in one place.
+One JSON field keeps nested and optional fields simple, such as `codeword` on a message, and the same text can go to the browser as the SSE `data:` unchanged. `toStreamFields` and `fromStreamFields` do the conversion, so the field name lives in one place.
 
 ### 2.3 Slot numbers
 
@@ -46,6 +47,8 @@ Each key of architecture §3 has a constant or a small function that builds its 
 |---|---|
 | `session:{id}` | Expires 60 s after the Session ends; at most 10,000 entries |
 | `slots` | At most 1,000 entries |
+| `slot:{n}` | Permanent; an empty `sessionId` means no Session, and readers drop it before checking the state against `SlotStatus`, whose `sessionId` can't be empty |
+| `slot-count` | Permanent, rewritten at each runner start (D58) |
 | `presence` | Expires after the time without viewers setting (§4), 30 s to start with |
 | `watching:{n}` | Expires 10 s after the last heartbeat |
 | `spend:{date}`, `sleeping:{date}` | Expire after 2 days |
@@ -71,14 +74,15 @@ Only the settings that more than one component reads are here. The rest are sett
 
 | Setting | Environment variable | Default | Read by |
 |---|---|---|---|
-| Slots | `SLOTS` | 3 | runner, web, front end (through web) |
-| Time without viewers before a Session stops | `PRESENCE_TIMEOUT_SECONDS` | 30 | web (the `presence` key's expiry); the runner relies on the key expiring |
+| Time without viewers before a Session stops | `PRESENCE_TIMEOUT_SECONDS` | 30 | web (the `presence` key's expiry), and the runner: how long a presence check that fails with an error still counts as present |
 | Reveal rate, Explorer | `REVEAL_RATE_EXPLORER` | 30 characters per second | runner (pacing), front end (typing, through web) |
 | Reveal rate, Pretender | `REVEAL_RATE_PRETENDER` | 120 characters per second | the same |
 
-The defaults are the spec's starting values. Each component's ConfigMap (D45) sets them as environment variables, and both components load them with the same function, `loadSettings`, so a name can't be spelled differently in two places.
+The defaults are the spec's starting values. One ConfigMap, `settings`, generated in `deploy/base/kustomization.yaml` (D45), sets them as environment variables, and both components load it, so the values can't differ between them. The schema, `SharedEnvironment`, is exported too: a component extends it with its own settings and checks everything at once, so one error names every invalid variable, its own and the shared ones.
 
-**An invalid value stops the component at start-up.** Each value must be a positive whole number. If one isn't, `loadSettings` throws an error naming every invalid variable, the process exits, and the pod's restarts show in `kubectl get pods` with the error in its logs. Running with a wrong value instead, such as 0 slots, would fail later and less clearly.
+**The slot count isn't here,** though both sides need it: it's the runner's setting, and the web server reads it from Valkey, where the runner writes it (D58). Two components reading the same setting can disagree for a moment, since a change restarts them one after the other.
+
+**An invalid value stops the component at start-up.** Each value must be a positive whole number. If one isn't, `loadSettings` throws an error naming every invalid variable, the process exits, and the pod's restarts show in `kubectl get pods` with the error in its logs. Running with a wrong value instead, such as a reveal rate of 0, would fail later and less clearly.
 
 ### 4.1 Setting or constant
 
@@ -105,11 +109,13 @@ bun test
 ```
 
 ```bash
-bun run check
+bun run check:all
 ```
 
-- **`bun test`** runs every `*.test.ts` file in the repository. The user-list test (§3) needs Docker running; it starts its container and removes it again, in about two seconds.
+- **`bun run check:all`** runs every check in turn, stopping at the first that fails: the tests, the type check, Biome (D61) and the link check. Each can also be run on its own, as `bun test`, `bun run check`, `bun run lint` and `bun run check:links`.
+- **`bun test`** runs every `*.test.ts` file in the repository. The user-list test (§3) needs Docker running; it starts its container and removes it again, in about two seconds. Starting that container is in `src/testing.ts`, which the runner's and web server's tests use too, imported as `@exhibition/shared/testing`.
 - **`bun run check`** runs the TypeScript compiler without producing output (`tsc --noEmit`). Bun runs TypeScript by removing the types without checking them, so type errors show only here and in the editor.
+- **`bun run lint`** runs Biome's linter (D61), which reports likely mistakes. Biome doesn't format the code. In test files the rule against `!` (telling TypeScript a value can't be missing) is off, since a wrong `!` there makes the test fail loudly anyway.
 
 The tests cover:
 
