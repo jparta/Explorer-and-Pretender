@@ -68,6 +68,8 @@ test("a watched slot runs a Session until the Explorer finds the Codeword", asyn
     VALKEY_HOST: "localhost", // not used: the test connects to its own Valkey
     VALKEY_PORT: "6379",
     PRESENCE_TIMEOUT_SECONDS: "30",
+    EXPLORER_REASONING_EFFORT: "low",
+    PRETENDER_REASONING_EFFORT: "low",
     // Fast enough that pacing takes no noticeable time.
     REVEAL_RATE_EXPLORER_CHARS_PER_SECOND: "1000000",
     REVEAL_RATE_PRETENDER_CHARS_PER_SECOND: "1000000",

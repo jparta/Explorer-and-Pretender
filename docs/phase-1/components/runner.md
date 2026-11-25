@@ -151,6 +151,7 @@ The runner has no readiness probe, since nothing sends it traffic (D29).
 | Provider endpoint | `LLM_BASE_URL` | S5.2 |
 | Explorer's model | `EXPLORER_MODEL` | S5.1 |
 | Pretender's model | `PRETENDER_MODEL` | S5.1 |
+| Reasoning effort, per role | `EXPLORER_REASONING_EFFORT`, `PRETENDER_REASONING_EFFORT` | Spec §7. Sent to OpenRouter as `reasoning.effort`; for Claude models OpenRouter turns it into a share of `MAX_MESSAGE_TOKENS` for reasoning, and `none` turns reasoning off ([OpenRouter: reasoning tokens](https://openrouter.ai/docs/use-cases/reasoning-tokens), checked November 2026) |
 | Valkey's address | `VALKEY_HOST`, `VALKEY_PORT` | The Valkey Service's name and port |
 
 The values are in `runner-config`, in `deploy/base/runner/kustomization.yaml`, plus the shared settings ([shared component doc §4](shared.md#4-settings)). The runner checks its own and the shared ones together, so an invalid or missing value stops it at start-up with one error naming every bad variable.

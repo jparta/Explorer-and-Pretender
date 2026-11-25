@@ -5,6 +5,12 @@ import { log as defaultLog, describeError, type Logger } from "./log.ts";
 
 export type ChatMessage = OpenAI.Chat.ChatCompletionMessageParam;
 
+// How much a model reasons before answering, as OpenRouter names the levels. For Claude
+// models OpenRouter turns it into a share of max_tokens for reasoning, "none" turning it
+// off; a model with fewer levels gets the nearest one it has.
+export const REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
 export type ModelResult =
   // wasCutOff: the message reached the length cap (S5.3) and was cut there.
   | { ok: true; text: string; costDollars: number; wasCutOff: boolean }
@@ -32,6 +38,7 @@ export async function callModel(request: {
   client: OpenAI;
   model: string;
   maxTokens: number;
+  reasoningEffort: ReasoningEffort;
   messages: ChatMessage[];
   signal: AbortSignal;
   log?: Logger;
@@ -39,7 +46,13 @@ export async function callModel(request: {
   let completion: OpenAI.Chat.ChatCompletion;
   try {
     completion = await request.client.chat.completions.create(
-      { model: request.model, max_tokens: request.maxTokens, messages: request.messages },
+      {
+        model: request.model,
+        max_tokens: request.maxTokens,
+        messages: request.messages,
+        // OpenRouter's field (D13), missing from the package's types.
+        ...({ reasoning: { effort: request.reasoningEffort } } as object),
+      },
       { signal: request.signal },
     );
   } catch (error) {

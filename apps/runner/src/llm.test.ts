@@ -30,6 +30,7 @@ const call = (options: { timeoutMs?: number; signal?: AbortSignal } = {}) =>
     client: makeClient(options.timeoutMs),
     model: "vendor/model",
     maxTokens: 200,
+    reasoningEffort: "low",
     messages: [{ role: "user", content: "hello" }],
     signal: options.signal ?? new AbortController().signal,
     log,
@@ -56,6 +57,7 @@ describe("callModel", () => {
       model: "vendor/model",
       max_tokens: 200,
       messages: [{ role: "user", content: "hello" }],
+      reasoning: { effort: "low" },
     });
   });
 

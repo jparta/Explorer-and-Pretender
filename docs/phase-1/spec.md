@@ -83,6 +83,7 @@ What must be true when Phase 1 is done. Each requirement can be checked from the
 | Time without viewers before a Session stops | 30 s |
 | Reveal rate, Explorer / Pretender | 30 / 120 characters per second |
 | Maximum message length | after trial runs |
+| Reasoning effort, Explorer / Pretender | after trial runs |
 | Daily spend cap | $2 |
 | Provider key daily limit | 10% above the cap |
 | Models and endpoint | per provider |

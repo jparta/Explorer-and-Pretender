@@ -60,6 +60,7 @@ export function createSessionRunner(options: {
             client: modelClient,
             model: models[role],
             maxTokens: config.maxMessageTokens,
+            reasoningEffort: config.reasoningEffort[role],
             messages,
             signal,
           });

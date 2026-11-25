@@ -4,6 +4,7 @@
 // in the ConfigMaps, so there are no defaults here.
 import { z } from "zod";
 import { parseEnvironment, positiveWholeNumber, SharedEnvironment, toSettings } from "@exhibition/shared";
+import { REASONING_EFFORTS } from "./llm.ts";
 
 const RunnerEnvironment = SharedEnvironment.extend({
   SLOT_COUNT: positiveWholeNumber, // the runner owns the slot count (D65)
@@ -17,6 +18,9 @@ const RunnerEnvironment = SharedEnvironment.extend({
   LLM_BASE_URL: z.url(),
   EXPLORER_MODEL: z.string().min(1),
   PRETENDER_MODEL: z.string().min(1),
+  // How much each model reasons before answering; to be tried in the trial runs.
+  EXPLORER_REASONING_EFFORT: z.enum(REASONING_EFFORTS),
+  PRETENDER_REASONING_EFFORT: z.enum(REASONING_EFFORTS),
   VALKEY_HOST: z.string().min(1),
   VALKEY_PORT: positiveWholeNumber,
 });
@@ -35,6 +39,7 @@ export function loadRunnerConfig(env: Record<string, string | undefined> = proce
     llmBaseUrl: parsedEnv.LLM_BASE_URL,
     explorerModel: parsedEnv.EXPLORER_MODEL,
     pretenderModel: parsedEnv.PRETENDER_MODEL,
+    reasoningEffort: { explorer: parsedEnv.EXPLORER_REASONING_EFFORT, pretender: parsedEnv.PRETENDER_REASONING_EFFORT },
     valkeyHost: parsedEnv.VALKEY_HOST,
     valkeyPort: parsedEnv.VALKEY_PORT,
   };

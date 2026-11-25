@@ -17,6 +17,8 @@ const env = {
   PRESENCE_TIMEOUT_SECONDS: "45",
   REVEAL_RATE_EXPLORER_CHARS_PER_SECOND: "30",
   REVEAL_RATE_PRETENDER_CHARS_PER_SECOND: "120",
+  EXPLORER_REASONING_EFFORT: "low",
+  PRETENDER_REASONING_EFFORT: "none",
 };
 
 describe("loadRunnerConfig", () => {
@@ -54,6 +56,14 @@ describe("loadRunnerConfig", () => {
     expect(load).toThrow(/EXCHANGE_CAP/);
     expect(load).toThrow(/DAILY_SPEND_CAP_DOLLARS/);
     expect(load).toThrow(/PRESENCE_TIMEOUT_SECONDS/);
+  });
+
+  test("takes each role's reasoning effort, from OpenRouter's values", () => {
+    expect(loadRunnerConfig(env).reasoningEffort).toEqual({ explorer: "low", pretender: "none" });
+  });
+
+  test("refuses a reasoning effort OpenRouter doesn't know", () => {
+    expect(() => loadRunnerConfig({ ...env, EXPLORER_REASONING_EFFORT: "extreme" })).toThrow(/EXPLORER_REASONING_EFFORT/);
   });
 
   test("refuses a base URL that isn't a URL", () => {
