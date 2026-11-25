@@ -10,7 +10,8 @@
     "check": "tsc --noEmit",
     "check:links": "docker run --rm -v \"$PWD:/input\" -w /input lycheeverse/lychee:0.24.2-alpine --offline --include-fragments --no-progress --exclude-path node_modules --exclude-path .claude \"**/*.md\"",
     "lint": "biome lint .",
-    "check:all": "bun test && bun run check && bun run lint && bun run check:links"
+    "check:all": "bun test && bun run check && bun run lint && bun run check:links",
+    "test:live": "bun apps/runner/scripts/live-session.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.8",

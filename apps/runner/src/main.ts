@@ -4,7 +4,7 @@
 import { loadWordLists } from "./codeword.ts";
 import { loadRunnerConfig, readSecretFile } from "./config.ts";
 import { isAlive, startHealthServer } from "./health.ts";
-import { createModelClient } from "./llm.ts";
+import { createModelClient, MODEL_CALL_TIMEOUT_MS } from "./llm.ts";
 import { describeError, errorFields, log } from "./log.ts";
 import { createSessionRunner, loadPrompts } from "./runner.ts";
 import { SlotLoops } from "./slots.ts";
@@ -17,11 +17,6 @@ const VALKEY_PASSWORD_FILE = "/etc/valkey-password/runner";
 const HEALTH_PORT = 8080; // the liveness probe's port, named in the Deployment
 const TICK_INTERVAL_MS = 1_000; // each slot is checked once a second (architecture 6.2)
 const MAX_TICK_AGE_MS = 10_000; // a loop that hasn't ticked for this long fails liveness (D29)
-// Per model call: generous while the models are tried, so slow reasoning isn't cut off
-// (a timed-out call is still billed, but counts as nothing towards the spend). Three tries
-// of this, plus the waits between them, is the longest a Session can stand still before
-// it ends as interrupted (runner component doc, section 2.3).
-const MODEL_CALL_TIMEOUT_MS = 5 * 60_000;
 const VALKEY_ANSWER_TIMEOUT_MS = 5_000; // how long each start-up check waits for Valkey to answer
 const VALKEY_RETRY_PAUSE_MS = 5_000; // the pause before trying again after Valkey refused or failed
 const SLOT_STATES_RETRY_PAUSE_MS = 1_000; // the pause before writing the slot states again after a failure

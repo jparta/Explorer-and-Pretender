@@ -151,7 +151,7 @@ The runner has no readiness probe, since nothing sends it traffic (D29).
 | Provider endpoint | `LLM_BASE_URL` | S5.2 |
 | Explorer's model | `EXPLORER_MODEL` | S5.1 |
 | Pretender's model | `PRETENDER_MODEL` | S5.1 |
-| Reasoning effort, per role | `EXPLORER_REASONING_EFFORT`, `PRETENDER_REASONING_EFFORT` | Spec §7. Sent to OpenRouter as `reasoning.effort`; for Claude models OpenRouter turns it into a share of `MAX_MESSAGE_TOKENS` for reasoning, and `none` turns reasoning off ([OpenRouter: reasoning tokens](https://openrouter.ai/docs/use-cases/reasoning-tokens), checked November 2026) |
+| Reasoning effort, per role | `EXPLORER_REASONING_EFFORT`, `PRETENDER_REASONING_EFFORT` | Spec §7. Sent to OpenRouter as `reasoning.effort`; for Claude models OpenRouter turns it into a share of `MAX_MESSAGE_TOKENS` for reasoning, and `none` turns reasoning off. Claude needs `MAX_MESSAGE_TOKENS` above that budget, which is at least 1,024 tokens, so a low maximum with reasoning on makes every call fail ([OpenRouter: reasoning tokens](https://openrouter.ai/docs/use-cases/reasoning-tokens), checked November 2026) |
 | Valkey's address | `VALKEY_HOST`, `VALKEY_PORT` | The Valkey Service's name and port |
 
 The values are in `runner-config`, in `deploy/base/runner/kustomization.yaml`, plus the shared settings ([shared component doc §4](shared.md#4-settings)). The runner checks its own and the shared ones together, so an invalid or missing value stops it at start-up with one error naming every bad variable.
@@ -223,7 +223,9 @@ The fake provider runs inside the test process, on this machine, outside the clu
 
 `main.ts` has no tests of its own: it only starts and stops the parts. Its wait for Valkey is in `startup.ts`, which has. Running it in the cluster checks it (below).
 
-**Not yet checked in the cluster: a Session with real models.** That needs a real key, and costs a few cents. It's the first real run: it tries each reasoning effort level (D62), which first needs a setting for the effort, after which the placeholders (message length, pacing) get tuned.
+**The live test** (`bun run test:live`, `apps/runner/scripts/live-session.ts`) runs one Session through the runner's own code against the real provider, with the API key from `.env`, the settings from both ConfigMaps, and a throwaway Valkey. It has a short exchange cap (`SHORT_EXCHANGE_CAP` in the script), or the full one with `--full`, and no pacing. It checks the shape (session-start, messages, session-end, an ending that isn't interrupted or sleeping, a cost above 0) and prints the conversation. It's run by hand, never in `check:all`, since it costs money, its answers vary, and it needs the real key. First run: ran its course, 4 messages, $0.0012.
+
+**Checked in the cluster with real models:** one full-length Session in slot 0 ran its course in 15 exchanges (30 calls), took about 6 minutes and cost $0.0144. Its `session-end` was written and the stream got its expiry (D19).
 
 **Checked in the cluster** with a placeholder key, which makes every call fail, so nothing is spent:
 
@@ -244,7 +246,7 @@ kubectl logs -n exhibition deploy/runner -f
 
 ## Sources
 
-- [OpenRouter: errors](https://openrouter.ai/docs/api-reference/errors), [OpenRouter: usage accounting](https://openrouter.ai/docs/use-cases/usage-accounting), [OpenRouter: limits](https://openrouter.ai/docs/api_reference/limits.md) (checked November 2026)
+- [OpenRouter: errors](https://openrouter.ai/docs/api-reference/errors), [OpenRouter: reasoning tokens](https://openrouter.ai/docs/use-cases/reasoning-tokens), [OpenRouter: usage accounting](https://openrouter.ai/docs/use-cases/usage-accounting), [OpenRouter: limits](https://openrouter.ai/docs/api_reference/limits.md) (checked November 2026)
 - [openai on npm](https://www.npmjs.com/package/openai), version 7.62.0 (checked November 2026)
 - [Bun: Valkey client](https://bun.com/docs/runtime/redis), [Bun: Docker images](https://hub.docker.com/r/oven/bun) (checked November 2026)
 - [Kubernetes: NetworkPolicies](https://kubernetes.io/docs/concepts/services-networking/network-policies/), [Kubernetes: liveness probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/), [Kubernetes: CrashLoopBackOff](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#container-restarts) (checked November 2026)

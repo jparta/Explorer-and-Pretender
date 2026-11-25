@@ -5,9 +5,17 @@ import { log as defaultLog, describeError, type Logger } from "./log.ts";
 
 export type ChatMessage = OpenAI.Chat.ChatCompletionMessageParam;
 
+// Per model call: generous while the models are tried, so slow reasoning isn't cut off
+// (a timed-out call is still billed, but counts as nothing towards the spend). Three tries
+// of this, plus the waits between them, is the longest a Session can stand still before
+// it ends as interrupted (runner component doc, section 2.3).
+export const MODEL_CALL_TIMEOUT_MS = 5 * 60_000;
+
 // How much a model reasons before answering, as OpenRouter names the levels. For Claude
 // models OpenRouter turns it into a share of max_tokens for reasoning, "none" turning it
-// off; a model with fewer levels gets the nearest one it has.
+// off; a model with fewer levels gets the nearest one it has. Claude needs max_tokens
+// above the reasoning budget, which is at least 1,024 tokens, so a low MAX_MESSAGE_TOKENS
+// with reasoning on makes every call fail.
 export const REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 

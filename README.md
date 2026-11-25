@@ -70,3 +70,5 @@ bun run check:all
 - **`bun run check`** runs the TypeScript compiler without producing output (`tsc --noEmit`). Bun runs TypeScript by removing the types without checking them, so type errors show only here and in the editor.
 - **`bun run lint`** runs Biome's linter (D61), which reports likely mistakes. Biome doesn't format the code (D67). In test files the rule against `!` (telling TypeScript a value can't be missing) is off, since a wrong `!` there makes the test fail loudly anyway.
 - **`bun run check:links`** checks the links in every Markdown file, headings included, with lychee in Docker.
+
+**The live test,** `bun run test:live`, runs one short Session against the real model provider, with the API key from `.env`, and prints the conversation; `bun run test:live --full` runs a full-length one. It's not part of `check:all`: it costs money (a short run about a tenth of a cent, a full one about 1.5 cents with the current models), its answers vary, and it needs the real key. Run it after changing the models, the prompts or the reasoning effort. See the [runner component doc](docs/phase-1/components/runner.md).
