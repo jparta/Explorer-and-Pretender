@@ -75,14 +75,17 @@ export class SlotLoops {
   async resumePreviousSlotStates(): Promise<void> {
     const { store, slotCount } = this.options;
     const previousStates = (await store.readSlotStates()) ?? [];
-    for (let slotIndex = 0; slotIndex < Math.max(slotCount, previousStates.length); slotIndex++) {
-      const previousState = previousStates[slotIndex];
-      // Only a crash leaves a slot running: a clean shutdown moves it to its intermission.
-      // A slot beyond a lowered count gets its Session ended too, and drops out of the list.
-      if (previousState?.state === "running" && previousState.sessionId) {
+    // First end every Session left running, without changing any slot state, so that if
+    // one fails, the retry still reads the previous states as they were. Only a crash
+    // leaves a slot running: a clean shutdown moves it to its intermission. A slot beyond
+    // a lowered count gets its Session ended too, and drops out of the list.
+    for (const [slotIndex, previousState] of previousStates.entries()) {
+      if (previousState.state === "running" && previousState.sessionId) {
         await this.endIfUnended(slotIndex, previousState.sessionId);
       }
-      if (slotIndex >= slotCount) continue;
+    }
+    for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
+      const previousState = previousStates[slotIndex];
       switch (previousState?.state) {
         case "running":
         case "intermission":
@@ -232,14 +235,8 @@ export class SlotLoops {
   private async endSessionAndSetNextState(slotIndex: number, endedSession: EndedSession): Promise<void> {
     const { store, nowMs } = this.options;
     try {
-      // A retry checks first whether the earlier try got as far as session-end, and
-      // then still sets the expiry, which may be what failed.
-      const isRetry = this.slotStates[slotIndex]?.state === "intermission" && this.slotStates[slotIndex].unrecordedEnding !== undefined;
-      if (isRetry && (await store.readLastEvent(endedSession.sessionId))?.type === "session-end") {
-        await store.expireSession(endedSession.sessionId);
-      } else {
-        await store.endSession(endedSession.sessionId, endedSession.ending);
-      }
+      // Safe to repeat: a retry may find that the earlier try got as far as session-end.
+      await store.endSessionUnlessEnded(endedSession.sessionId, endedSession.ending);
       if (endedSession.ending === "sleeping") await store.setSleeping(utcDate(new Date(nowMs())));
       if (endedSession.stopReason === "absent") void this.setSlotState(slotIndex, { state: "idle" });
       else if (endedSession.stopReason !== "shutdown" && (await this.isMachineSleeping())) void this.setSlotState(slotIndex, { state: "sleeping" });
@@ -253,10 +250,9 @@ export class SlotLoops {
   // Ends a Session left by an earlier runner, unless it already has its session-end:
   // a runner can die between writing session-end and moving the slot on.
   private async endIfUnended(slotIndex: number, sessionId: string): Promise<void> {
-    const { store } = this.options;
-    if ((await store.readLastEvent(sessionId))?.type === "session-end") return;
-    await store.endSession(sessionId, "interrupted");
-    this.log.info("ended a Session left running", { slot: slotIndex, sessionId });
+    if (await this.options.store.endSessionUnlessEnded(sessionId, "interrupted")) {
+      this.log.info("ended a Session left running", { slot: slotIndex, sessionId });
+    }
   }
 
   private intermissionStartingNow(sessionId: string | undefined): Intermission {

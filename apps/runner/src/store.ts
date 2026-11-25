@@ -59,6 +59,18 @@ export class ValkeyStore {
     await this.expireSession(sessionId);
   }
 
+  // Ends the Session unless its stream already ends with session-end, and sets the
+  // ending's expiry either way, so it's safe to repeat: after a failed try, or for a
+  // runner that died between the two writes. Resolves with whether it wrote session-end.
+  async endSessionUnlessEnded(sessionId: string, ending: Ending): Promise<boolean> {
+    if ((await this.readLastEvent(sessionId))?.type === "session-end") {
+      await this.expireSession(sessionId);
+      return false;
+    }
+    await this.endSession(sessionId, ending);
+    return true;
+  }
+
   // Lets an ended Session's stream expire a minute later (D19).
   async expireSession(sessionId: string): Promise<void> {
     await this.client.expire(sessionKey(sessionId), SESSION_EXPIRE_SECONDS);

@@ -428,6 +428,31 @@ describe("start-up after a crash (architecture 9)", () => {
     expect(await slotState(2)).toEqual({ state: "intermission", sessionId: "old" });
   });
 
+  test("a died runner whose session-end is there but whose expiry isn't: the stream gets its expiry at start-up", async () => {
+    await store.startSession("old", 2); // a day's expiry, as from session-start (D68)
+    await store.writeEvent("old", { type: "session-end", ending: "found" });
+    await store.writeSlotStates([{ state: "idle" }, { state: "idle" }, { state: "running", sessionId: "old" }]);
+    await slots.resumePreviousSlotStates();
+    expect(Number(await adminClient().send("TTL", [sessionKey("old")]))).toBeLessThanOrEqual(60);
+  });
+
+  test("if ending one Session left running fails, start-up changes no slot state, so its retry still finds both", async () => {
+    for (const sessionId of ["old0", "old1"]) {
+      await store.writeEvent(sessionId, { type: "session-start", sessionId, slot: 0, kind: "terminal" });
+    }
+    await store.writeSlotStates([{ state: "running", sessionId: "old0" }, { state: "running", sessionId: "old1" }, { state: "idle" }]);
+    const endSession = store.endSession.bind(store);
+    let failuresLeft = 1;
+    store.endSession = async (sessionId, ending) => {
+      if (sessionId === "old1" && failuresLeft-- > 0) throw new Error("Connection closed");
+      return endSession(sessionId, ending);
+    };
+    await expect(slots.resumePreviousSlotStates()).rejects.toThrow("Connection closed");
+    await slots.whenSlotStatesWritten();
+    await slots.resumePreviousSlotStates(); // main.ts retries start-up
+    expect((await streamEvents("old1")).at(-1)).toEqual({ type: "session-end", ending: "interrupted" });
+  });
+
   test("a slot in its intermission or asleep keeps its state", async () => {
     await store.writeSlotStates([{ state: "intermission", sessionId: "old" }, { state: "sleeping" }, { state: "idle" }]);
     await slots.resumePreviousSlotStates();
