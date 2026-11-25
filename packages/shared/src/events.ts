@@ -3,8 +3,8 @@
 // Readers check every event before using it (shared component doc, section 2.1).
 import { z } from "zod";
 
-// Slots are numbered from 0 (shared component doc, section 2.3).
-const slotNumber = z.number().int().nonnegative();
+// Slot indexes start from 0 (shared component doc, section 2.3).
+const slotIndex = z.number().int().nonnegative();
 
 export const Role = z.enum(["explorer", "pretender"]);
 export type Role = z.infer<typeof Role>;
@@ -20,7 +20,7 @@ export const SessionEvent = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("session-start"),
     sessionId: z.string().min(1),
-    slot: slotNumber,
+    slot: slotIndex,
     kind: PretenderKind,
   }),
   z.object({
@@ -51,7 +51,7 @@ export const SlotStateWithSession = z.object({
 export type SlotStateWithSession = z.infer<typeof SlotStateWithSession>;
 
 // Every slot's state, written whenever one changes (D65). A slot's position in the list
-// is its number, and the list's length is the slot count.
+// is its index, and the list's length is the slot count.
 export const SlotStatesEvent = z.object({
   type: z.literal("slots"),
   slots: z.array(SlotStateWithSession),
@@ -61,7 +61,7 @@ export type SlotStatesEvent = z.infer<typeof SlotStatesEvent>;
 // What the browser receives over SSE: a Session event tagged with its slot, or every
 // slot's state. A session-start then carries its slot twice, both the same (D55).
 export const SseEvent = z.union([
-  SessionEvent.and(z.object({ slot: slotNumber })),
+  SessionEvent.and(z.object({ slot: slotIndex })),
   SlotStatesEvent,
 ]);
 export type SseEvent = z.infer<typeof SseEvent>;

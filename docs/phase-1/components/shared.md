@@ -35,9 +35,9 @@ XADD session:9f2c * event {"type":"message","role":"explorer","text":"ls -la"}
 
 One JSON field keeps nested and optional fields simple, such as `codeword` on a message, and the same text can go to the browser as the SSE `data:` unchanged. `toStreamFields` and `fromStreamFields` do the conversion, so the field name lives in one place.
 
-### 2.3 Slot numbers
+### 2.3 Slot indexes
 
-Slots are numbered from 0 (architecture §3). The schemas accept any whole number from 0 up; that a slot number is below the number of slots is checked where that setting is known.
+A slot is identified by its index, from 0 (architecture §3). The schemas accept any whole number from 0 up; that a slot index is below the number of slots is checked where that setting is known.
 
 ## 3. Keys
 

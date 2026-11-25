@@ -67,7 +67,7 @@ Key names, expiry times and limits are in `packages/shared`: constants, apart fr
 
 **The slot count** is the runner's setting, and it reaches the web server and the page as the length of the slot states list (§4.2), so the two can't disagree (D65). A lowered count is a shorter list.
 
-**Slot numbers** start from 0, everywhere: in keys such as `watching:{n}`, in events and in the SSE cursor (§5.1). A slot's number is then also its position in a list of slots. Viewers never see the numbers (S4.3).
+**Slot indexes** start from 0, everywhere: in keys such as `watching:{n}`, in events and in the SSE cursor (§5.1). A slot's index is then also its position in a list of slots. Viewers never see them (S4.3).
 
 **Who may do what:** the runner and the web server each log in to Valkey as their own user, allowed only the keys and commands this table gives them (D46). The users are defined in the [Valkey component doc](components/valkey.md#6-users-and-permissions).
 
@@ -98,7 +98,7 @@ Each `message` event holds one whole message (D31). The browser opens a message 
 
 ### 4.2 Slot state
 
-Whenever a slot's state changes, and at start-up, the runner writes every slot's state as one `SlotStatesEvent` to `slots` (D65). A slot's position in the list is its number:
+Whenever a slot's state changes, and at start-up, the runner writes every slot's state as one `SlotStatesEvent` to `slots` (D65). A slot's position in the list is its index:
 
 ```ts
 type SlotState = "idle" | "running" | "intermission" | "sleeping";
