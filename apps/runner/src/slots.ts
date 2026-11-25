@@ -198,7 +198,7 @@ export class SlotLoops {
   private async startSession(n: number): Promise<void> {
     const { store, nowMs, runSession } = this.options;
     const sessionId = this.newSessionId();
-    await store.writeEvent(sessionId, { type: "session-start", sessionId, slot: n, kind: "terminal" });
+    await store.startSession(sessionId, n);
     const abortController = new AbortController();
     const running: Running = { state: "running", sessionId, abortController, presenceConfirmedAtMs: nowMs(), endingHandled: Promise.resolve() };
     // Waits until Valkey shows the slot running, however long that takes, so the Session

@@ -190,6 +190,15 @@ describe("starting", () => {
     expect(await streamEvents("s1")).toEqual([{ type: "session-start", sessionId: "s1", slot: 1, kind: "terminal" }]);
   });
 
+  test("a new Session's stream expires within a day even if its ending is never written (D68)", async () => {
+    await setPresent();
+    await setWatching(0);
+    await slots.tick(0);
+    const ttlSeconds = Number(await adminClient().send("TTL", [sessionKey("s1")]));
+    expect(ttlSeconds).toBeGreaterThan(60);
+    expect(ttlSeconds).toBeLessThanOrEqual(24 * 60 * 60);
+  });
+
   test("a running slot doesn't start a second Session", async () => {
 
     await setPresent();
@@ -304,10 +313,12 @@ describe("ending", () => {
       if (failuresLeft-- > 0) throw new Error("Connection closed");
       return expireSession(sessionId);
     };
+    const ttlSeconds = async () => Number(await adminClient().send("TTL", [sessionKey("s1")]));
     await endFakeSession(0, "found");
-    expect(Number(await adminClient().send("TTL", [sessionKey("s1")]))).toBe(-1);
+    expect(await ttlSeconds()).toBeGreaterThan(60); // still the day from the start (D68)
     await slots.tick(0);
-    expect(Number(await adminClient().send("TTL", [sessionKey("s1")]))).toBeGreaterThan(0);
+    expect(await ttlSeconds()).toBeGreaterThan(0);
+    expect(await ttlSeconds()).toBeLessThanOrEqual(60);
     expect(await streamEvents("s1")).toHaveLength(2);
   });
 

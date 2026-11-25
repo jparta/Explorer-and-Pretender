@@ -56,7 +56,7 @@ The front end lives inside `apps/web`, because the web server serves it (D20) an
 
 | Key | Type | Written by | Read by | Content | Lifetime |
 |---|---|---|---|---|---|
-| `session:{id}` | Stream | runner | web | The Session's events (§4.1), in order | Expires 1 minute after the Session ends (D19). Limited to 10,000 entries as a safety net |
+| `session:{id}` | Stream | runner | web | The Session's events (§4.1), in order | Expires 1 minute after the Session ends (D19), or a day after it starts if its ending is never written (D68). Limited to 10,000 entries as a safety net |
 | `slots` | Stream | runner | web | Every slot's state, one entry each time one changes (§4.2). The last entry is the current state of every slot (D65) | Trimmed to the last 1,000 entries |
 | `presence` | String | web | runner | Exists as long as any viewer is present | Expires 30 s after the last heartbeat (S2.7) |
 | `watching:{n}` | String | web | runner | Exists as long as someone watches slot *n* | Expires 10 s after the last heartbeat |
@@ -214,7 +214,7 @@ sequenceDiagram
 2. **A Codeword**, made of an adjective, a noun and a verb drawn at random from the word lists of the Pretender's kind, in `apps/runner/words/<kind>/` (S3.1, S3.2, D63).
 3. **The prompts.** The prompts are files in `apps/runner/prompts/`, one for the Explorer and one per kind of Pretender. The runner reads them, and fills the Codeword into the Pretender's prompt only (S3.3). They are never sent to the browser (S3.4).
 4. **An empty history.** The runner keeps the history itself, because a chat completion call is *stateless*: each call sends the whole conversation. Some providers offer conversations stored on their side, but those APIs differ between providers, which S5.2 rules out. The history is also small, and caching on the provider's side keeps resending it cheap.
-5. **Announce it.** Write `session-start` to the new stream, then write every slot's state, with slot *n* `running`, to `slots`. The stream exists before anyone is told about it.
+5. **Announce it.** Write `session-start` to the new stream and give it a day's expiry (D68), then write every slot's state, with slot *n* `running`, to `slots`. The stream exists before anyone is told about it.
 
 **The Explorer's first call.** The Explorer goes first (S2.2), so it has nothing to respond to yet, and some providers reject a call without a user message. So the Explorer's instructions are sent as its first *user* message rather than as a system prompt. The Pretender's instructions are its system prompt.
 

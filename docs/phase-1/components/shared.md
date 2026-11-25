@@ -45,7 +45,7 @@ Each key of architecture §3 has a constant or a small function that builds its 
 
 | Key | Lifetime or limit |
 |---|---|
-| `session:{id}` | Expires 60 s after the Session ends; at most 10,000 entries |
+| `session:{id}` | Expires 60 s after the Session ends, or a day after it starts if its ending is never written (D68); at most 10,000 entries |
 | `slots` | At most 1,000 entries |
 | `presence` | Expires after the time without viewers setting (§4), 30 s to start with |
 | `watching:{n}` | Expires 10 s after the last heartbeat |

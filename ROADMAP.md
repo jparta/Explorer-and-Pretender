@@ -29,7 +29,6 @@
 - [ ] Deployed with GitOps (Flux or Argo CD): the cluster follows the repository by itself, and removes what is no longer in it, such as old hash-named ConfigMaps and the old values they held
 - [ ] Images pinned by digest, kept up to date by a bot that opens pull requests (D39)
 - [ ] Metrics and dashboards, sized against the VM's memory (D47)
-- [ ] Automatic cleanup of Session streams left without an end or expiry, such as one whose Session was never announced because a slot write failed
 
 ## Ideas, not promises
 

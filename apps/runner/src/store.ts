@@ -7,6 +7,7 @@ import {
   fromStreamFields,
   PRESENCE_KEY,
   SESSION_EXPIRE_SECONDS,
+  UNENDED_SESSION_EXPIRE_SECONDS,
   SESSION_MAX_ENTRIES,
   SessionEvent,
   sessionKey,
@@ -57,6 +58,13 @@ export class ValkeyStore {
     await this.client.send("XADD", [
       sessionKey(sessionId), "MAXLEN", "~", String(SESSION_MAX_ENTRIES), "*", ...toStreamFields(event),
     ]);
+  }
+
+  // Writes session-start and gives the stream a day to live, so it goes away even if its
+  // ending is never written (D68).
+  async startSession(sessionId: string, slot: number): Promise<void> {
+    await this.writeEvent(sessionId, { type: "session-start", sessionId, slot, kind: "terminal" });
+    await this.client.send("EXPIRE", [sessionKey(sessionId), String(UNENDED_SESSION_EXPIRE_SECONDS)]);
   }
 
   async endSession(sessionId: string, ending: Ending): Promise<void> {

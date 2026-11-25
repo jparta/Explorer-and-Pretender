@@ -5,6 +5,8 @@
 // One stream per Session, holding its events.
 export const sessionKey = (sessionId: string) => `session:${sessionId}`;
 export const SESSION_EXPIRE_SECONDS = 60; // after the Session ends (D19)
+// From the start, in case its ending is never written; the ending shortens it (D68).
+export const UNENDED_SESSION_EXPIRE_SECONDS = 24 * 60 * 60;
 export const SESSION_MAX_ENTRIES = 10_000; // a safety net
 
 // Every slot's state, one event each time one changes; the last entry is the current
