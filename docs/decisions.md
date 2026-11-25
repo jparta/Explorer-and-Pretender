@@ -660,3 +660,11 @@ The kubelet's probes still get in: Kubernetes lets traffic from a pod's own node
 **Alternatives:** Accepting such streams, which then stay in Valkey for good; a scheduled clean-up of streams left without an end or expiry, planned for Phase 4.
 
 **Why:** The expiry keeps Sessions clean in a straightforward way, and it makes the scheduled clean-up unnecessary. A Session can't last a day, since the exchange cap ends it far sooner, so the expiry never cuts a running one short.
+
+## D69 — Prompts and word lists stay as files, one per kind
+
+**Decision:** The prompts stay as Markdown files in `apps/runner/prompts/`, one for the Explorer and one per kind of Pretender, and the word lists as files in `apps/runner/words/<kind>/`, also when more kinds come (Phase 3).
+
+**Alternatives:** One TypeScript file holding every kind's prompt in a map keyed by kind.
+
+**Why:** The word lists are already read from the file tree, and neither way is much worse than the other. Reading a file is fast enough at start-up, and files are a common, well-tried way to keep such data, as in Unix.
