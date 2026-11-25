@@ -1,0 +1,99 @@
+// Puts the parts of a Session together: a new Codeword, the prompts, the model calls,
+// the stream writes and the spend. The slot loop calls the function this returns to run
+// each Session. Tested end to end in runner.test.ts.
+import type OpenAI from "openai";
+import { type Role, utcDate } from "@exhibition/shared";
+import { makeCodeword, type WordLists } from "./codeword.ts";
+import type { RunnerConfig } from "./config.ts";
+import { callModel } from "./llm.ts";
+import { log as defaultLog, type Logger } from "./log.ts";
+import { fillPrompt, runSession } from "./session.ts";
+import type { RunSession } from "./slots.ts";
+import type { Store } from "./store.ts";
+
+const MAX_ATTEMPTS = 3; // tries per message before the Session is interrupted (S2.5)
+const RETRY_WAIT_MS = 2_000; // long enough for a brief provider hiccup to pass, short enough not to show
+
+const promptsDir = new URL("../prompts/", import.meta.url);
+
+// The Explorer's prompt and the terminal Pretender's, with <Codeword> where the
+// Codeword goes (architecture 12).
+export type Prompts = { explorer: string; terminal: string };
+
+export async function loadPrompts(dir: URL = promptsDir): Promise<Prompts> {
+  return {
+    explorer: await Bun.file(new URL("explorer.md", dir)).text(),
+    terminal: await Bun.file(new URL("terminal.md", dir)).text(),
+  };
+}
+
+export function createSessionRunner(options: {
+  config: RunnerConfig;
+  modelClient: OpenAI;
+  store: Store;
+  prompts: Prompts;
+  words: WordLists;
+  log?: Logger;
+}): RunSession {
+  const { config, modelClient, store, prompts, words } = options;
+  const log = options.log ?? defaultLog;
+  const models: Record<Role, string> = { explorer: config.explorerModel, pretender: config.pretenderModel };
+
+  return (slot, sessionId, signal) => {
+    const codeword = makeCodeword(words);
+    // Logged for debugging, such as checking why a Session did or didn't end as found.
+    log.info("Codeword chosen", { slot, sessionId, codeword });
+    return runSession(
+      {
+        codeword,
+        explorerPrompt: prompts.explorer,
+        pretenderPrompt: fillPrompt(prompts.terminal, codeword),
+        turnCap: config.turnCap,
+        revealRateCharsPerSecond: config.shared.revealRateCharsPerSecond,
+        maxAttempts: MAX_ATTEMPTS,
+        retryWaitMs: RETRY_WAIT_MS,
+      },
+      {
+        callModel: async (role, messages, signal) => {
+          const result = await callModel({
+            client: modelClient,
+            model: models[role],
+            maxTokens: config.maxMessageTokens,
+            messages,
+            signal,
+          });
+          if (!result.ok && !signal.aborted) {
+            log.warn("model call failed", { slot, sessionId, role, reason: result.reason, error: result.error });
+          }
+          if (result.ok && result.cutOff) log.info("message cut off at the length cap", { slot, sessionId, role });
+          return result;
+        },
+        write: (event) => store.writeEvent(sessionId, event),
+        // Each call's cost and the day's total go to the logs (S6.5).
+        addSpend: async (costDollars) => {
+          const spendTodayDollars = await store.addSpend(utcDate(), costDollars);
+          log.info("call cost", { slot, sessionId, costDollars, spendTodayDollars });
+        },
+        now: Date.now,
+        sleep: abortableSleep,
+      },
+      signal,
+    );
+  };
+}
+
+// A sleep that a stopped Session cuts short: it rejects as soon as the signal is aborted.
+export function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(signal.reason);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}

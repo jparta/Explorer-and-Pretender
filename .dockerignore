@@ -1,0 +1,4 @@
+# Kept out of every image's build context. .env holds the API key.
+.env
+.git
+**/node_modules

@@ -1,0 +1,12 @@
+daemonized
+deprecated
+detached
+elevated
+headless
+orphaned
+privileged
+rootless
+suspended
+unresponsive
+verbose
+zombie

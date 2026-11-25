@@ -1,0 +1,10 @@
+bootloops
+defragments
+degausses
+hibernates
+overheats
+powercycles
+recalibrates
+throttles
+undervolts
+whines
