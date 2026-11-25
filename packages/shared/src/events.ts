@@ -27,8 +27,8 @@ export const SessionEvent = z.discriminatedUnion("type", [
     type: z.literal("message"),
     role: Role,
     text: z.string(),
-    // Set when this Explorer message contains the Secret (architecture section 6.3).
-    secret: z.string().min(1).optional(),
+    // Set when this Explorer message contains the Codeword (architecture section 6.3).
+    codeword: z.string().min(1).optional(),
   }),
   z.object({
     type: z.literal("session-end"),
@@ -44,7 +44,8 @@ export const SlotStatus = z.object({
   type: z.literal("slot"),
   slot: slotNumber,
   state: SlotState,
-  // Set while running and during the intermission.
+  // Set while running and during the intermission. In the slot:{n} hash, an empty
+  // sessionId means no Session; readers drop it before checking (shared component doc, section 3).
   sessionId: z.string().min(1).optional(),
 });
 export type SlotStatus = z.infer<typeof SlotStatus>;

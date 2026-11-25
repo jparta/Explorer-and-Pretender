@@ -11,7 +11,7 @@ import {
 const sessionEvents: SessionEvent[] = [
   { type: "session-start", sessionId: "9f2c", slot: 2, kind: "terminal" },
   { type: "message", role: "explorer", text: "ls -la" },
-  { type: "message", role: "explorer", text: "cat velvet-otter-hums-quietly", secret: "velvet-otter-hums-quietly" },
+  { type: "message", role: "explorer", text: "cat verbose-keepalive-hibernates", codeword: "verbose-keepalive-hibernates" },
   { type: "message", role: "pretender", text: "total 0" },
   { type: "session-end", ending: "found" },
   { type: "session-end", ending: "sleeping" },
@@ -55,7 +55,7 @@ describe("checking shapes", () => {
     ["a negative slot", { type: "session-start", sessionId: "9f2c", slot: -1, kind: "terminal" }],
     ["a fractional slot", { type: "session-start", sessionId: "9f2c", slot: 1.5, kind: "terminal" }],
     ["an unknown kind", { type: "session-start", sessionId: "9f2c", slot: 1, kind: "spaceship" }],
-    ["an empty Secret", { type: "message", role: "explorer", text: "x", secret: "" }],
+    ["an empty Codeword", { type: "message", role: "explorer", text: "x", codeword: "" }],
   ];
 
   test.each(rejected)("rejects %s", (_, data) => {

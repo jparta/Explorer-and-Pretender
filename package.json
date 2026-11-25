@@ -2,11 +2,18 @@
   "name": "explorer-and-pretender",
   "private": true,
   "packageManager": "bun@1.4.4",
-  "workspaces": ["packages/*", "apps/*"],
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "check:links": "docker run --rm -v \"$PWD:/input\" -w /input lycheeverse/lychee:0.24.2-alpine --offline --include-fragments --no-progress --exclude-path node_modules --exclude-path .claude \"**/*.md\"",
+    "lint": "biome lint .",
+    "check:all": "bun test && bun run check && bun run lint && bun run check:links"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.8",
     "@types/bun": "1.4.4",
     "typescript": "7.0.2"
   }

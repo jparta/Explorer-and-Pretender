@@ -1,5 +1,6 @@
 // Valkey key names and their lifetimes (architecture section 3). The key patterns in
-// deploy/base/valkey/users.acl must allow these names; keys.test.ts checks that.
+// deploy/base/valkey/users.acl must allow these names: the components' own tests show
+// what they may do, and keys.test.ts checks what they may not.
 
 // One stream per Session, holding its events.
 export const sessionKey = (sessionId: string) => `session:${sessionId}`;
@@ -10,8 +11,12 @@ export const SESSION_MAX_ENTRIES = 10_000; // a safety net
 export const SLOTS_KEY = "slots";
 export const SLOTS_MAX_ENTRIES = 1_000;
 
-// The current state of one slot, a hash with `state` and `sessionId`.
+// The current state of one slot, a hash with `state` and `sessionId`. An empty
+// sessionId means no Session.
 export const slotKey = (slot: number) => `slot:${slot}`;
+
+// The number of slots, written by the runner at start-up (D58).
+export const SLOT_COUNT_KEY = "slot-count";
 
 // Exists while any viewer is present. Its lifetime is the presenceTimeoutSeconds setting.
 export const PRESENCE_KEY = "presence";

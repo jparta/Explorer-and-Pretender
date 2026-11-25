@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { RedisClient } from "bun";
+import type { RedisClient } from "bun";
+import { startValkey, type TestValkey } from "./testing.ts";
 import {
   PRESENCE_KEY,
   sessionKey,
+  SLOT_COUNT_KEY,
   sleepingKey,
   SLOTS_KEY,
   slotKey,
@@ -26,43 +28,17 @@ describe("utcDate", () => {
 // needs is shown by the runner's and web server's own tests, against a real Valkey.
 // Needs Docker: it starts a throwaway Valkey container (shared component doc, section 3).
 describe("Valkey's user list", () => {
-  const root = new URL("../../../", import.meta.url);
   const date = utcDate(new Date("2026-11-17T12:00:00Z"));
   const session = sessionKey("9f2c");
-  let containerId = "";
+  let valkey: TestValkey;
   let admin: RedisClient;
 
   beforeAll(async () => {
-    // The same image as the cluster's, read from the StatefulSet.
-    const statefulSet = await Bun.file(new URL("deploy/base/valkey/statefulset.yaml", root)).text();
-    const image = /image:\s*(\S+)/.exec(statefulSet)?.[1];
-    if (!image) throw new Error("no image in statefulset.yaml");
-
-    containerId = docker("run", "-d", "--rm", "-p", "127.0.0.1:0:6379", image);
-    const address = docker("port", containerId, "6379").split("\n")[0]!;
-
-    // Load the users as the start-up script does (D50): drop comments, fill in passwords.
-    // ACL SETUSER takes the same rules as a line of the user list. The default user
-    // goes last, since this connection uses it until then.
-    const lines = (await Bun.file(new URL("deploy/base/valkey/users.acl", root)).text())
-      .split("\n")
-      .filter((line) => line.startsWith("user "))
-      .map((line) => line.replace(/\{\{\w+\}\}/g, "test-password").split(/\s+/).slice(1));
-    const setup = await connect(`valkey://${address}`);
-    for (const [name, ...rules] of lines.filter(([name]) => name !== "default")) {
-      await setup.send("ACL", ["SETUSER", name!, ...rules]);
-    }
-    setup.close();
-    admin = await connect(`valkey://admin:test-password@${address}`);
-    for (const [, ...rules] of lines.filter(([name]) => name === "default")) {
-      await admin.send("ACL", ["SETUSER", "default", ...rules]);
-    }
+    valkey = await startValkey();
+    admin = valkey.admin;
   }, 30_000);
 
-  afterAll(() => {
-    admin?.close();
-    if (containerId) docker("rm", "-f", containerId);
-  });
+  afterAll(() => valkey?.stop());
 
   // ACL DRYRUN answers OK, or a message saying why the command would be refused.
   const allowed = async (user: string, command: string[]) =>
@@ -74,9 +50,13 @@ describe("Valkey's user list", () => {
   const refused: [string, string[]][] = [
     ["runner", ["SET", PRESENCE_KEY, "1"]],
     ["runner", ["SET", watchingKey(0), "1"]],
+    ["runner", ["DEL", spendKey(date)]],
+    ["runner", ["DEL", sessionKey("9f2c")]],
+
     ["web", ["XADD", session, "*", "event", "{}"]],
     ["web", ["XADD", SLOTS_KEY, "*", "event", "{}"]],
     ["web", ["HSET", slotKey(0), "state", "idle"]],
+    ["web", ["SET", SLOT_COUNT_KEY, "3"]],
     ["web", ["GET", spendKey(date)]],
     ["web", ["SET", sleepingKey(date), "1"]],
     ["runner", ["GET", "unrelated"]],
@@ -91,26 +71,3 @@ describe("Valkey's user list", () => {
     async (user, _, command) => expect(await allowed(user, command)).toBe(false),
   );
 });
-
-function docker(...args: string[]): string {
-  const result = Bun.spawnSync(["docker", ...args]);
-  if (result.exitCode !== 0) {
-    throw new Error(`docker ${args[0]} failed (is Docker running?): ${result.stderr.toString()}`);
-  }
-  return result.stdout.toString().trim();
-}
-
-// Connects once Valkey has started, retrying for up to ten seconds.
-async function connect(url: string): Promise<RedisClient> {
-  for (let attempt = 0; ; attempt++) {
-    const client = new RedisClient(url, { autoReconnect: false });
-    try {
-      await client.send("PING", []);
-      return client;
-    } catch (error) {
-      client.close();
-      if (attempt >= 50) throw error;
-      await Bun.sleep(200);
-    }
-  }
-}
